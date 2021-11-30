@@ -62,6 +62,7 @@ public class Aerodynamics : MonoBehaviour
     Vector3 sideslipRotationVector;                     // (UNSURE)
     Vector3 angleOfAttackRotationVector;                // (UNSURE)
     public float alpha, beta;                           // (rad)
+    public float alpha_deg, beta_deg;                   // (degrees)
     public float sinAlpha, cosAlpha, sinBeta, cosBeta;  // (dimensionless)
 
 
@@ -263,8 +264,9 @@ public class Aerodynamics : MonoBehaviour
         ey2 = ey * ey;
         ez2 = ez * ez;
 
-        // Set the inertia of the body as a hollow ellipsoid
-        rb.inertiaTensor = rb.mass * new Vector3(thickness_b * thickness_b / 16f + chord_c * chord_c / 16f, span_a * span_a / 16f + chord_c * chord_c / 16f, span_a * span_a / 16f + thickness_b * thickness_b / 16f);
+        // Set the inertia of the body as
+        // Solid Ellipsoid
+        rb.inertiaTensor = 0.2f * rb.mass * new Vector3(thickness_b * thickness_b / 4f + chord_c * chord_c / 4f, span_a * span_a / 4f + chord_c * chord_c / 4f, span_a * span_a / 4f + thickness_b * thickness_b / 4f);
     }
 
     public void GetLocalWind_3()
@@ -273,6 +275,14 @@ public class Aerodynamics : MonoBehaviour
         wind_localVelocity = referenceAxesTransform.InverseTransformDirection(externalWind - rb.velocity);
         wind_localDirection = wind_localVelocity.normalized;
         wind_globalVelocity = externalWind - rb.velocity;
+        // Get the wind vector parallel to the lifting plane
+        wind_directionAlongLiftingPlane_zprime = new Vector3(wind_localDirection.x, 0, wind_localDirection.z).normalized;
+
+        // This check is here because if zprime is (0,0,0) then the angle of attack becomes 0 when it should be +-90 deg
+        if(wind_directionAlongLiftingPlane_zprime == Vector3.zero)
+        {
+            wind_directionAlongLiftingPlane_zprime = Vector3.forward;
+        }
 
         // Rotational wind - assuming no external vorticity
         angularVelocity_global = rb.angularVelocity;
@@ -300,18 +310,19 @@ public class Aerodynamics : MonoBehaviour
 
     public void GetAeroAngles_6()
     {
-        // Get the wind vector parallel to the lifting plane
-        wind_directionAlongLiftingPlane_zprime = Vector3.Scale(wind_localDirection, new Vector3(1, 0, 1));
-
         // Sideslip
         sideslipRotationVector = Vector3.Cross(Vector3.forward, wind_directionAlongLiftingPlane_zprime) * Vector3.Dot(Vector3.forward, wind_directionAlongLiftingPlane_zprime);
         beta = Mathf.Atan2(wind_localVelocity.x, wind_localVelocity.z);
+        beta_deg = Mathf.Rad2Deg * beta;
         sinBeta = Mathf.Sin(beta);
         cosBeta = Mathf.Cos(beta);
 
         // Angle of attack
-        angleOfAttackRotationVector = Vector3.Cross(wind_directionAlongLiftingPlane_zprime, wind_localDirection) * Vector3.Dot(wind_directionAlongLiftingPlane_zprime, wind_localDirection);
-        alpha = Mathf.Atan2(-wind_localVelocity.y, wind_directionAlongLiftingPlane_zprime.magnitude);
+        angleOfAttackRotationVector = Vector3.Cross(wind_directionAlongLiftingPlane_zprime, Vector3.down);
+        alpha_deg = Vector3.SignedAngle(wind_localVelocity, wind_directionAlongLiftingPlane_zprime, angleOfAttackRotationVector);
+        alpha = Mathf.Deg2Rad * alpha_deg;
+        //alpha = Mathf.Atan2(-wind_localVelocity.y, wind_directionAlongLiftingPlane_zprime.magnitude);
+        //alpha_deg = Mathf.Rad2Deg * alpha;
         sinAlpha = Mathf.Sin(alpha);
         cosAlpha = Mathf.Cos(alpha);
     }
@@ -365,7 +376,7 @@ public class Aerodynamics : MonoBehaviour
 
         // Lift before and after stall
         CL_preStall = liftCurveSlope * (alpha - alpha_0);
-        CL_postStall = 0.5f * CZmax * thicknessCorrection * Mathf.Sin(2 * (alpha - alpha_0));
+        CL_postStall = 0.5f * CZmax * thicknessCorrection * Mathf.Sin(2f * (alpha - alpha_0));
 
         // Sigmoid function for blending between pre and post stall
         // Wasting some calulcations here by converting to degrees...
@@ -378,7 +389,9 @@ public class Aerodynamics : MonoBehaviour
         // Pitching moment at mid chord due to camber only active pre stall
         CM_0 = 0.25f * -liftCurveSlope * alpha_0 * preStallFilter;
 
-        // Using trig identity for cos(2a) = cos^2(a) - sin^2(a) to save on extra trig computations
+        // Original equation for this is: z_cop = c/8 * (cos(2a) + 1)
+        // Using trig identity for cos(2a) =  2*cos^2(a) - 1 to save on extra trig computations
+        // Also, ax_c is the axis, not diameter so we x2 again
         CoP = 0.5f * ax_c_mid_prime * cosAlpha * cosAlpha;
 
         // Pitching moment because lift is treated as acting at the centre of the body
@@ -444,20 +457,22 @@ public class Aerodynamics : MonoBehaviour
         // Damping opposes the velocity of the object
         dampingTorque *= -1f;
     }
-
+    public Vector3 crossResult;
     public void GetAerodynamicForces_11()
     {
         float qS = dynamicPressure * planformArea;
 
-        rotationalMagnusLiftForce = -Vector3.Cross(rho * Vector3.Scale(volumeVector, angularVelocity_referenceAxes), wind_localVelocity);
+        // Negative inside there because angular velocity of the body is opposite to circulation
+        rotationalMagnusLiftForce = Vector3.Cross(-rho * Vector3.Scale(volumeVector, angularVelocity_referenceAxes), wind_localVelocity);
 
         Vector3 liftDirection = Vector3.Cross(wind_localDirection, angleOfAttackRotationVector);
 
         liftForce = CL * qS * liftDirection;
         dragForce = CD * dynamicPressure * profileArea * wind_localDirection;
-        momentDueToLift = CM * qS * chord_c * angleOfAttackRotationVector;
+        crossResult = Vector3.Cross(wind_localDirection, wind_directionAlongLiftingPlane_zprime).normalized;
+        momentDueToLift = CM * qS * (2f * ax_c_mid_prime) * crossResult;
 
-        resultantAerodynamicForce_local = liftForce + dragForce + rotationalMagnusLiftForce;
+        resultantAerodynamicForce_local = liftForce + dragForce; // + rotationalMagnusLiftForce;
         resultantAerodynamicForce_global = referenceAxesTransform.TransformDirection(resultantAerodynamicForce_local);
 
         resultantAerodynamicMoment_local = momentDueToLift + dampingTorque;
@@ -519,8 +534,9 @@ public class Aerodynamics : MonoBehaviour
         {
             Debug.LogWarning("No RigidBody Component found on " + gameObject.name + ", adding one.");
             rb = gameObject.AddComponent<Rigidbody>();
-            rb.angularDrag = 0;
         }
+        //rb.angularDrag = 0;
+        //rb.drag = 0;
 
         if (!referenceAxesTransform)
         {
@@ -529,6 +545,8 @@ public class Aerodynamics : MonoBehaviour
             referenceAxesTransform = go.transform;
             referenceAxesTransform.localScale = Vector3.one;
         }
+        // Not sure which is better for this - we treat centre of mass and centre of geometry as the same thing...
+        referenceAxesTransform.localPosition = Vector3.zero;
 
         GetEllipsoid_1_to_2();
     }
@@ -550,10 +568,11 @@ public class Aerodynamics : MonoBehaviour
         ApplyAerodynamicForces_12();
     }
 
-    private void OnDrawGizmos()
+    private void OnDrawGizmosSelected()
     {
         if (referenceAxesTransform)
         {
+            /*
             // Drag - Red       Lift - Green        Wind - Blue
             Gizmos.color = Color.red;
             Vector3 dragWorld = referenceAxesTransform.TransformDirection(dragForce);
@@ -572,13 +591,34 @@ public class Aerodynamics : MonoBehaviour
             Gizmos.color = Color.magenta;
             Gizmos.DrawLine(transform.position, transform.position + referenceAxesTransform.TransformDirection(angleOfAttackRotationVector));
 
-            Gizmos.color = Color.yellow;
-            Vector3 liftRotationalWorld = referenceAxesTransform.TransformDirection(rotationalMagnusLiftForce);
-            Gizmos.DrawLine(transform.position, transform.position + liftRotationalWorld);
+            //Gizmos.color = Color.yellow;
+            //Vector3 liftRotationalWorld = referenceAxesTransform.TransformDirection(rotationalMagnusLiftForce);
+            //Gizmos.DrawLine(transform.position, transform.position + liftRotationalWorld);
 
-            // This doesn't work
-            //Gizmos.color = Color.white;
-            //Gizmos.DrawSphere(referenceAxesTransform.TransformPoint(new Vector3(0, 0, CoP)), thickness_b*1.1f);
+            Gizmos.color = Color.white;
+            Gizmos.DrawLine(transform.position, transform.position + Vector3.Cross(wind_directionAlongLiftingPlane_zprime, Vector3.down));
+
+            */
+
+
+
+            
+            // Wind vector
+            Gizmos.color = Color.blue;
+            Gizmos.DrawLine(transform.position, transform.position - wind_globalVelocity);
+
+           
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawLine(transform.position, transform.position + referenceAxesTransform.TransformDirection(angleOfAttackRotationVector));
+
+            //Gizmos.color = Color.yellow;
+            //Vector3 liftRotationalWorld = referenceAxesTransform.TransformDirection(rotationalMagnusLiftForce);
+            //Gizmos.DrawLine(transform.position, transform.position + liftRotationalWorld);
+
+            Gizmos.color = Color.white;
+            Gizmos.DrawLine(transform.position, transform.position - referenceAxesTransform.TransformDirection(wind_directionAlongLiftingPlane_zprime));
+
+
         }
     }
 }
