@@ -6,6 +6,10 @@ using System;
 
 public class Aerodynamics : MonoBehaviour
 {
+    // Debugging Values
+    public Vector3 EAB_windVel;
+
+
     // For testing purposes all variables and functions are made public
     // This allows for easy probing of the aerodynamic model
 
@@ -14,53 +18,193 @@ public class Aerodynamics : MonoBehaviour
     //      Unity Related Components
     //  -------------------------------------------------------------------------------------------
 
-    
+
     // Unity's physics body, used to apply physics to the object
     public Rigidbody rb;
 
-
-    //  -------------------------------------------------------------------------------------------
-    //      Dimensions
-    //  -------------------------------------------------------------------------------------------
-
     // Flag to determine if the model needs to recalculate dimensions at runtime
-    public bool variableShape;
+    public bool dynamicallyVariableShape;
 
-    // Dimensions of the aerodynamic body in order of ascending relative size
-    // Thickness chord and span are selected in order of ascending dimensions of the ellipsoid
-    // i.e. Span >= Chord >= Thickness
-    public float thickness_b, chord_c, span_a;                                          // (m)
-    public float aspectRatio, aspectRatio_clamped, aspectRatio_prime;                   // (dimensionless)
-    public float thicknessToChordRatio_bOverc, thicknessToChordRatio_bOverc_prime;      // (dimensionless)
-    public float thicknessCorrection;                                                   // (UNSURE)
-    public float camber, camberRatio, camberRatio_prime;                                // (dimensionless)
-    public float planformArea, profileArea;                                             // (m^2)
-    Vector3 areaVector;                                                                 // (m^2)
-    Vector3 volumeVector;                                                               // (m^3)
-    public float ellipsoidSurfaceArea;                                                  // (m^2)
-    public float ex, ey, ez;                                                            // (dimensionless)
-    public float ex2, ey2, ez2;                                                         // (dimensionless)
+    // Magnus effect is pretty dominant at the moment...
+    public bool includeMagnusEffect = false;
 
-    // Ellipsoid axes - used for equivalent aerodynamic body projection
-    public float ax_b_minor, ax_c_mid, ax_a_major;                                      // (m)
-    public float ax_b_minor_prime, ax_c_mid_prime, ax_a_major_prime;                    // (m)
+    public bool initialised = false;
 
 
     //  -------------------------------------------------------------------------------------------
-    //      Coordinate Systems and Transformations
+    //      Reference Frames
     //  -------------------------------------------------------------------------------------------
+    /*      Using a class for reference frames, this gives us a clear way to
+     *      differentiate between wind velocity in the earth or body frame etc.
+     *      The ReferenceFrame class holds the rotation between the previous frame
+     *      and the current frame. This is done because all frames are in a
+     *      hierarchy:
+     *          1. Earth
+     *          2. Object
+     *          3. Body
+     *          4. Equivalent Aerodynamic Body (EAB)
+     *      
+     *      There are helper functions in the Aerodynamics script which are used to
+     *      transform directions from Body and EAB frames to the Earth frame
+     */
 
-    // The body axes used to resolve wind into local coordinates
-    public Transform referenceAxesTransform;
-    Quaternion localToReferenceRotation;
+    public class ReferenceFrame
+    {
+        // Useful directions - I don't think they get used at all actually...
+        public Vector3 xDirection, yDirection, zDirection;  // (unit vector)
 
-    // Directions of useful features
-    Vector3 liftingPlaneNormal_y;   // The unit vector normal to the lifting plane  (unit vector)
-    Vector3 chordAxis_z;            // The direction of the chord dimension         (unit vector)
+
+        // Wind resolved into this coordinate frame
+        public Vector3 windVelocity;                    // (m/s)
+        public Vector3 windVelocity_normalised;         // (unit vector
+        public Vector3 angularWindVelocity;             // (rad/s)
+        public Vector3 angularWindVelocity_normalised;  // (unit vector)
+
+        // The rotation from the previous frame of reference to this frame of reference
+        public Quaternion objectToFrameRotation;
+
+        // The rotation from the current frame of reference back to the previous frame
+        public Quaternion inverseObjectToFrameRotation;
+
+        public void SetDirectionVectors(Vector3 x, Vector3 y, Vector3 z)
+        {
+            xDirection = x;
+            yDirection = y;
+            zDirection = z;
+        }
+
+        public void SetFrameRotation(Quaternion rotation)
+        {
+            // This was the logical approach to me... but it seems they need to be reverse
+            //objectToFrameRotation = rotation;
+            //inverseObjectToFrameRotation = Quaternion.Inverse(rotation);
+
+            objectToFrameRotation = Quaternion.Inverse(rotation);
+            inverseObjectToFrameRotation = rotation;
+        }
+
+        public void SetResolvedWind(Vector3 linearWind, Vector3 angularWind)
+        {
+            // The normalisations here are probably wasted computation... it's an
+            // optimisation incase the normalised vector is needed more than once
+            windVelocity = objectToFrameRotation * linearWind;
+            windVelocity_normalised = windVelocity.normalized;
+
+            angularWindVelocity = objectToFrameRotation * angularWind;
+            angularWindVelocity_normalised = angularWindVelocity.normalized;
+        }
+    }
+
+    // Converts a vector in EAB frame to earth frame
+    public Vector3 TransformEABToEarth(Vector3 vector)
+    {
+        return TransformBodyToEarth(equivAerobodyFrame.inverseObjectToFrameRotation * vector);
+    }
+
+    // Converts a vector in aeroBody frame to earth frame
+    public Vector3 TransformBodyToEarth(Vector3 vector)
+    {
+        return unityObjectFrame.inverseObjectToFrameRotation * (aeroBodyFrame.inverseObjectToFrameRotation * vector);
+    }
+
+    // Update the objectFrame rotation based on the current rotation of the Transform component
+    private void GetObjectAxisRotation()
+    {
+        unityObjectFrame.SetFrameRotation(transform.rotation);
+    }
+
+    //  -------------------------------------------------------------------------------------------
+    //      Aerodynamic Bodies
+    //  -------------------------------------------------------------------------------------------
+    /*      There are two ellipsoid bodies used for the aerodynamics simulation:
+     *          1. The Aerodynamic Body (AeroBody)
+     *          2. The Equivalent Aerodynamic Body (EAB)
+     *      The AeroBody holds the aerodynamic properties (e.g. aspect ratio,
+     *      chord, span etc) for the object being simulated. The EAB holds the
+     *      aerodynamic properties of the body when resolved into the wind such
+     *      that the body sees zero sideslip in the wind.
+     */
+    public class AerodynamicBody
+    {
+        // Diameters of the ellipsoid body, using aerodynamic notation
+        public float span_a, thickness_b, chord_c;      // (m)
+
+        // Radii of the ellipsoid body - for convenience so that multiples of two are neglected
+        public float minorAxis, midAxis, majorAxis;     // (m)
+
+        // Ratios
+        public float aspectRatio;                       // (dimensionless)
+        public float thicknessToChordRatio_bOverc;      // (dimensionless)
+        public float camberRatio;                       // (dimensionless)
+
+
+        public void SetDimensions(float span, float thickness, float chord)
+        {
+            span_a = span;
+            majorAxis = span / 2f;
+
+            chord_c = chord;
+            midAxis = chord / 2f;
+
+            thickness_b = thickness;
+            minorAxis = thickness / 2f;
+        }
+
+        public void SetAerodynamicRatios(float _camber)
+        {
+            aspectRatio = span_a / (Mathf.PI * chord_c);
+            camberRatio = _camber / chord_c;
+            thicknessToChordRatio_bOverc = thickness_b / chord_c;
+        }
+    }
+
+    // Earth is just Unity's global coordinates, the instance is only included here for clarity
+    public ReferenceFrame earthFrame = new ReferenceFrame();
+
+    // Object is the frame of reference defined by the GameObject's Transform component in Unity
+    // it has no notion of span, chord or thickness and the rotation of the frame is effectively arbitrary
+    // We need to keep track of this however as the dynamic motion of the object will generally
+    // rotate the frame
+    public ReferenceFrame unityObjectFrame = new ReferenceFrame();
+
+    // AeroBodyFrame is the rotation of the object frame such that (x, y, z) align with (span, thickness, chord)
+    public ReferenceFrame aeroBodyFrame = new ReferenceFrame();
+
+    // The aeroBody holds the object's aerodynamic dimensions (span, chord, aspect ratio etc)
+    public AerodynamicBody aeroBody = new AerodynamicBody();
+
+    // Equivalent Aerodynamic Body is the rotation and projection of the AeroBody frame and dimensions
+    // into the wind direction so that no sideslip is present
+    public ReferenceFrame equivAerobodyFrame = new ReferenceFrame();
+    public AerodynamicBody EAB = new AerodynamicBody();
+
+
+
+    //  -------------------------------------------------------------------------------------------
+    //      General Aerodynamic Body Properties
+    //  -------------------------------------------------------------------------------------------
+    //      These are properties which are not changed by the projection
+    //      from AeroBody to EAB and so are kept outside of the classes
+
+    
+    public float camber;                            // (m)
+
+    // The projection from body to eab assumes constant areas for the ellipsoid body
+    // therefore planform and profile areas are the same in each frame
+    public float planformArea, profileArea;         // (m^2)
+    public Vector3 areaVector;                      // (m^2)
+
+    // Not sure if the same applies to the volumes, I would assume so though
+    public Vector3 volumeVector;                    // (m^3)
+    public float ellipsoidSurfaceArea;              // (m^2)
+    public float lambda_x, lambda_y, lambda_z;      // (dimensionless)
+
+    //  -------------------------------------------------------------------------------------------
+    //      Aerodynamic Angles and Rotation Vectors
+    //  -------------------------------------------------------------------------------------------
 
     // Sideslip (beta) and angle of attack (alpha) vectors
-    Vector3 sideslipRotationVector;                     // (UNSURE)
-    Vector3 angleOfAttackRotationVector;                // (UNSURE)
+    Vector3 angleOfAttackRotationVector;                // (unit vector)
     public float alpha, beta;                           // (rad)
     public float alpha_deg, beta_deg;                   // (degrees)
     public float sinAlpha, cosAlpha, sinBeta, cosBeta;  // (dimensionless)
@@ -70,12 +214,8 @@ public class Aerodynamics : MonoBehaviour
     //      Fluid Properties and Characteristics
     //  -------------------------------------------------------------------------------------------
 
-    public Vector3 externalWind;                                    // (m/s)
-    public Vector3 wind_localVelocity, wind_globalVelocity;                // (m/s)
-    public Vector3 wind_localDirection;                                    // (unit vector)
-    public Vector3 wind_directionAlongLiftingPlane_zprime;                 // (m/s)
-    public Vector3 angularVelocity_global, angularVelocity_referenceAxes;  // (rad/s)
-    public Vector3 resolvedAngularVelocitySquared;                         // (rad^2/s^2)
+    // The fluid flow velocity which is not due to the object's velocity
+    public Vector3 externalFlowVelocity_inEarthFrame;   // (m/s)
 
     // Properties
     public float dynamicPressure;      // (Pa)
@@ -92,6 +232,10 @@ public class Aerodynamics : MonoBehaviour
     //  -------------------------------------------------------------------------------------------
     //      Aerodynamic Coefficients
     //  -------------------------------------------------------------------------------------------
+
+    // Corrections for EAB
+    public float aspectRatioCorrection_kAR, thicknessCorrection_kt;    // (dimensionless)
+    const float thicknessCorrection_labdat = 6f;                // (dimensionless)
 
     // Lift and rotational lift
     public float CL;                            // (dimensionless)
@@ -112,7 +256,7 @@ public class Aerodynamics : MonoBehaviour
     // Moment due to lift and camber
     public float CM;                            // (dimensionless)
     public float CM_0, CM_delta;                // (dimensionless)
-    public float CoP;                           // (m)
+    public float CoP_z;                         // (m)
 
     // Drag
     public float CD;                                    // (dimensionless)
@@ -127,34 +271,63 @@ public class Aerodynamics : MonoBehaviour
     //      Aerodynamic Forces and Torques
     //  -------------------------------------------------------------------------------------------
 
-    public Vector3 dragForce, liftForce, rotationalMagnusLiftForce;                    // (N)
-    public Vector3 dampingTorque, pressureTorque, shearStressTorque, momentDueToLift;  // (Nm)
+    // The names of these variables are still quite painful, but I'm not sure how to fix it
+    // They could be included in the frames but then it may become confusing as we don't
+    // calculate them in EAB frame - so no forces would exist there
+    public Vector3 dragForce_bodyFrame, liftForce_bodyFrame, rotationalMagnusLiftForce_axbody;                                  // (N)
+    public Vector3 dampingTorque_bodyFrame, pressureTorque_bodyFrame, shearStressTorque_bodyFrame, momentDueToLift_bodyFrame;   // (Nm)
 
-    public Vector3 resultantAerodynamicForce_global, resultantAerodynamicForce_local;  // (N)
-    public Vector3 resultantAerodynamicMoment_global, resultantAerodynamicMoment_local;// (Nm)
+    public Vector3 resultantAerodynamicForce_earthFrame, resultantAerodynamicForce_bodyFrame;                                   // (N)
+    public Vector3 resultantAerodynamicMoment_earthFrame, resultantAerodynamicMoment_bodyFrame;                                 // (Nm)
 
 
     //  -------------------------------------------------------------------------------------------
     //      Aerodynamic Functions
     //  -------------------------------------------------------------------------------------------
+    //      The numbers in the function names indicate the order in which they
+    //      should be called when computing the aerodynamics from start to finish
 
-    // These functions are marked with numbers representing the order in which they should be called
-    // When inspecting various parts of the model it may make more sense to adjust values and skip
-    // some of these computation steps
-    // Two groups are also included:
-    //      - GetEllipsoid_1_to_2() which handles the dimesions of the body
-    //      - CalculateAerodynamics_3_to_11() which resolves the body into the wind and computes the coefficients and forces
-    // The ApplyAerodynamics_12() function is then required to apply the forces to the rigidbody component during simulation
-    public void GetBodyDimensions_1()
+    public void GetReferenceFrames_1()
     {
-        // Long winded approach to getting the span, chord and thickness of the body
-        // based on the scale of the object - this could change in the future to be
-        // inputs by the user! Or it could default to using the bounding box of the mesh
+        /* The frames of reference and their notations in this model are:
+        *  - Earth                                                     (earth)
+        *  The earth frame is equivalent to Unity's global coordinates
+        *  
+        *  - Object                                                    (unityObject)
+        *  The object frame is equivalent to Unity's local coordinates
+        *  i.e. the arbitrary local (x,y,z) for the aerodynamic object
+        *  This frame moves and rotates with the rigid body dynamics
+        *  
+        *  - Body                                                      (aeroBody)
+        *  The body frame is a rotation of the object frame
+        *  such that (x, y, z) are aligned with (span, thickness, chord)
+        *  Thickness chord and span are selected in order of ascending
+        *  dimensions of the ellipsoid, i.e. span >= chord >= thickness
+        *  
+        *  - Equivalent Aerodynamic Body                               (EAB)
+        *  The equivalent aerodynamic body is the resolved body axes
+        *  such that the equivalent body experiences no sideslip. This is
+        *  both a rotation of the frame and a projection of dimensions
+        *  of the body to form a new ellipsoid
+        *  
+        *  First we need to get the span, chord and thickness of the body
+        *  based on the scale of the object - this could change in the future to be
+        *  inputs by the user! Or it could default to using the bounding box of the mesh
+        */
 
-        // For now, we're just looking at the scale of the object to obtain ellipsoid axes
+        // For now, we're just looking at the scale of the object to obtain ellipsoid dimensions
         float x = transform.localScale.x;
         float y = transform.localScale.y;
         float z = transform.localScale.z;
+
+        // This is redundant data really but it makes everything look nice
+        earthFrame.SetDirectionVectors(Vector3.right, Vector3.up, Vector3.forward);
+        unityObjectFrame.SetDirectionVectors(Vector3.right, Vector3.up, Vector3.forward);
+
+
+        // The object rotation will need updating at every time step as the object moves according to
+        // its rigid body dynamic motion, whereas the body frame is fixed relative to the object frame
+        GetObjectAxisRotation();
 
         // The normal to the lifting plane is aligned with the minor axis (thickness) of the ellipsoid,
         // The span is aligned to X and chord to Z
@@ -167,31 +340,22 @@ public class Aerodynamics : MonoBehaviour
             if (y > z)
             {
                 // Then x > y > z and we need to swap thickness and chord
-                liftingPlaneNormal_y = new Vector3(0, 0, 1);
-                chordAxis_z = new Vector3(0, 1, 0);
-                span_a = x;
-                chord_c = y;
-                thickness_b = z;
+                aeroBody.SetDimensions(x, z, y);
+                aeroBodyFrame.SetDirectionVectors(Vector3.right, Vector3.forward, Vector3.up);
             }
             else
             {
                 if (x >= z)
                 {
                     // Then x > z > y so we don't need to do anything
-                    liftingPlaneNormal_y = new Vector3(0, 1, 0);
-                    chordAxis_z = new Vector3(0, 0, 1);
-                    span_a = x;
-                    chord_c = z;
-                    thickness_b = y;
+                    aeroBody.SetDimensions(x, y, z);
+                    aeroBodyFrame.SetDirectionVectors(Vector3.right, Vector3.up, Vector3.forward);
                 }
                 else
                 {
                     // Then z > x > y so we need to swap chord and span
-                    liftingPlaneNormal_y = new Vector3(0, 1, 0);
-                    chordAxis_z = new Vector3(1, 0, 0);
-                    span_a = z;
-                    chord_c = x;
-                    thickness_b = y;
+                    aeroBody.SetDimensions(z, y, x);
+                    aeroBodyFrame.SetDirectionVectors(Vector3.forward, Vector3.up, Vector3.right);
                 }
             }
         }
@@ -203,180 +367,187 @@ public class Aerodynamics : MonoBehaviour
                 if (x >= z)
                 {
                     // Then y > x > z
-                    liftingPlaneNormal_y = new Vector3(0, 0, 1);
-                    chordAxis_z = new Vector3(1, 0, 0);
-                    span_a = y;
-                    chord_c = x;
-                    thickness_b = z;
+                    aeroBody.SetDimensions(y, z, x);
+                    aeroBodyFrame.SetDirectionVectors(Vector3.up, Vector3.forward, Vector3.right);
                 }
                 else
                 {
                     // Then y > z > x
-                    liftingPlaneNormal_y = new Vector3(1, 0, 0);
-                    chordAxis_z = new Vector3(0, 0, 1);
-                    span_a = y;
-                    chord_c = z;
-                    thickness_b = x;
+                    aeroBody.SetDimensions(y, x, z);
+                    aeroBodyFrame.SetDirectionVectors(Vector3.up, Vector3.right, Vector3.forward);
                 }
             }
             else
             {
                 // Then z > y > x
-                liftingPlaneNormal_y = new Vector3(1, 0, 0);
-                chordAxis_z = new Vector3(0, 1, 0);
-                span_a = z;
-                chord_c = y;
-                thickness_b = x;
+                aeroBody.SetDimensions(z, x, y);
+                aeroBodyFrame.SetDirectionVectors(Vector3.forward, Vector3.right, Vector3.up);
             }
         }
         // Rotate the reference axes to line up with (span, thickness, chord) == (a, b, c)
-        localToReferenceRotation = Quaternion.LookRotation(chordAxis_z, liftingPlaneNormal_y);
-        referenceAxesTransform.localRotation = localToReferenceRotation;
+        aeroBodyFrame.SetFrameRotation(Quaternion.LookRotation(aeroBodyFrame.zDirection, aeroBodyFrame.yDirection));
+
+        // Set the aerodynamic related properties
+        aeroBody.SetAerodynamicRatios(camber);
     }
 
     public void GetEllipsoidProperties_2()
     {
-        // Aerodynamic related properties
-        aspectRatio = span_a / (Mathf.PI * chord_c);
-        camberRatio = camber / chord_c;
-        thicknessToChordRatio_bOverc = thickness_b / chord_c;
-
         // Area and volume vectors
-        areaVector = Mathf.PI * new Vector3(thickness_b * chord_c, span_a * chord_c, span_a * thickness_b);
-        float piOver6 = Mathf.PI / 6f;
-        volumeVector.x = piOver6 * span_a * chord_c * chord_c;
-        volumeVector.y = piOver6 * thickness_b * span_a * span_a;
-        volumeVector.z = piOver6 * chord_c * span_a * span_a;
+        // Using the appropriate ellipsoid radii here so there is no potential for confusion by dividing by 2
+        areaVector = Mathf.PI * new Vector3(aeroBody.minorAxis * aeroBody.midAxis, aeroBody.majorAxis * aeroBody.midAxis, aeroBody.majorAxis * aeroBody.minorAxis);
+        
+        float fourPiOver3 = 4f * Mathf.PI / 3f;
+        volumeVector.x = fourPiOver3 * aeroBody.majorAxis * aeroBody.midAxis * aeroBody.midAxis;
+        volumeVector.y = fourPiOver3 * aeroBody.minorAxis * aeroBody.majorAxis * aeroBody.majorAxis;
+        volumeVector.z = fourPiOver3 * aeroBody.midAxis * aeroBody.majorAxis * aeroBody.majorAxis;
 
         // Planform area - area of the aerodynamic body in the lifting plane
         planformArea = areaVector.y;
 
         // Approximate surface area of ellipsoid
-        ellipsoidSurfaceArea = 4f * Mathf.PI * Mathf.Pow((1f / 3f) * (Mathf.Pow(span_a * thickness_b / 4f, 1.6f) + Mathf.Pow(span_a * chord_c / 4f, 1.6f) + Mathf.Pow(thickness_b * chord_c / 4f, 1.6f)), (1f / 1.6f));
+        ellipsoidSurfaceArea = 4f * Mathf.PI * Mathf.Pow((1f / 3f) * (Mathf.Pow(aeroBody.majorAxis * aeroBody.minorAxis, 1.6f)
+                                                                      + Mathf.Pow(aeroBody.majorAxis * aeroBody.midAxis, 1.6f)
+                                                                      + Mathf.Pow(aeroBody.minorAxis * aeroBody.midAxis, 1.6f)), (1f / 1.6f));
 
-        // Eccentricities
-        ex = Mathf.Sqrt(chord_c * chord_c / 4f - thickness_b * thickness_b / 4f) / (chord_c / 2f);
-        ey = Mathf.Sqrt(span_a * span_a / 4f - chord_c * chord_c / 4f) / (span_a / 2f);
-        ez = Mathf.Sqrt(span_a * span_a / 4f - thickness_b * thickness_b / 4f) / (span_a / 2f);
-
-        // Squares of eccentricities
-        ex2 = ex * ex;
-        ey2 = ey * ey;
-        ez2 = ez * ez;
-
-        // Set the inertia of the body as
-        // Solid Ellipsoid
-        rb.inertiaTensor = 0.2f * rb.mass * new Vector3(thickness_b * thickness_b / 4f + chord_c * chord_c / 4f, span_a * span_a / 4f + chord_c * chord_c / 4f, span_a * span_a / 4f + thickness_b * thickness_b / 4f);
+        // Axis Ratios
+        lambda_x = aeroBody.thickness_b / aeroBody.chord_c;
+        lambda_y = aeroBody.chord_c / aeroBody.span_a;
+        lambda_z = aeroBody.thickness_b / aeroBody.span_a;
     }
 
-    public void GetLocalWind_3()
+    // Not interested in setting the inertia here, we'll just use Unity's model of the inertia based on the collider mesh
+    //public void SetMassProperties_2()
+    //{
+    //    // Set the inertia of the body as
+    //    // Solid Ellipsoid
+    //    rb.inertiaTensor = 0.2f * rb.mass * new Vector3(aeroBody.thickness_b * aeroBody.thickness_b / 4f + aeroBody.chord_c * aeroBody.chord_c / 4f, aeroBody.span_a * aeroBody.span_a / 4f + aeroBody.chord_c * aeroBody.chord_c / 4f, aeroBody.span_a * aeroBody.span_a / 4f + aeroBody.thickness_b * aeroBody.thickness_b / 4f);
+    //}
+
+    public void ResolveWind_3()
     {
-        // Linear wind
-        wind_localVelocity = referenceAxesTransform.InverseTransformDirection(externalWind - rb.velocity);
-        wind_localDirection = wind_localVelocity.normalized;
-        wind_globalVelocity = externalWind - rb.velocity;
-        // Get the wind vector parallel to the lifting plane
-        wind_directionAlongLiftingPlane_zprime = new Vector3(wind_localDirection.x, 0, wind_localDirection.z).normalized;
+        // Putting this here because it's definitely going to be called and it needs doing
+        // before we can resolve the wind into object, body and EAB axes
+        GetObjectAxisRotation();
 
-        // This check is here because if zprime is (0,0,0) then the angle of attack becomes 0 when it should be +-90 deg
-        if(wind_directionAlongLiftingPlane_zprime == Vector3.zero)
-        {
-            wind_directionAlongLiftingPlane_zprime = Vector3.forward;
-        }
-
-        // Rotational wind - assuming no external vorticity
-        angularVelocity_global = rb.angularVelocity;
-        angularVelocity_referenceAxes = referenceAxesTransform.InverseTransformDirection(rb.angularVelocity);
-        resolvedAngularVelocitySquared = referenceAxesTransform.InverseTransformDirection(Vector3.Scale(Vector3.Scale((rb.angularVelocity), rb.angularVelocity), rb.angularVelocity.normalized));
+        // Start with earth frame
+        earthFrame.SetResolvedWind(externalFlowVelocity_inEarthFrame - rb.velocity, -rb.angularVelocity);
+        // Rotate to object frame
+        unityObjectFrame.SetResolvedWind(earthFrame.windVelocity, earthFrame.angularWindVelocity);
+        // Rotate to body frame
+        aeroBodyFrame.SetResolvedWind(unityObjectFrame.windVelocity, unityObjectFrame.angularWindVelocity);
     }
 
-    public void GetDynamicPressure_4()
-    {
-        dynamicPressure = 0.5f * rho * wind_localVelocity.sqrMagnitude;
-    }
 
-    public void GetReynoldsNumber_5()
+    public void GetFlowCharacteristics_4()
     {
         // Linear - only care about the direction of flow, not resolving into axes
-        // Linear uses diameter of the body
-        reynoldsNum_linear = rho * wind_localVelocity.magnitude * chord_c / mu;
+        // Bill says that really we should be looking at linear reynolds number in each axis separately
+        // Linear uses diameter of the body - note we use the EAB chord as wind is resolved along this direction
+        reynoldsNum_linear = rho * aeroBodyFrame.windVelocity.magnitude * EAB.chord_c / mu;
 
-        // Rotational - should maybe consider doing the same as the linear flow
         // Rotational uses the circumference of the body
-        reynoldsNum_x_rotational = Mathf.Abs(Mathf.PI * rho * angularVelocity_referenceAxes.x * (chord_c / 4f) * span_a / mu);
-        reynoldsNum_y_rotational = Mathf.Abs(Mathf.PI * rho * angularVelocity_referenceAxes.y * (span_a / 4f) * span_a / mu);
-        reynoldsNum_z_rotational = Mathf.Abs(Mathf.PI * rho * angularVelocity_referenceAxes.z * (span_a / 4f) * span_a / mu);
+        reynoldsNum_x_rotational = Mathf.Abs(Mathf.PI * rho * aeroBodyFrame.angularWindVelocity.x * aeroBody.midAxis * aeroBody.majorAxis / mu);
+        reynoldsNum_y_rotational = Mathf.Abs(Mathf.PI * rho * aeroBodyFrame.angularWindVelocity.y * aeroBody.majorAxis * aeroBody.majorAxis / mu);
+        reynoldsNum_z_rotational = Mathf.Abs(Mathf.PI * rho * aeroBodyFrame.angularWindVelocity.z * aeroBody.majorAxis * aeroBody.majorAxis / mu);
+
+        // Shear coefficient
+        // Linear
+        Cf_linear = reynoldsNum_linear == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_linear, 1f / 7f);
+
+        // Rotational
+        Cf_x_rotational = reynoldsNum_x_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_x_rotational, 1f / 7f);
+        Cf_y_rotational = reynoldsNum_y_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_y_rotational, 1f / 7f);
+        Cf_z_rotational = reynoldsNum_z_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_z_rotational, 1f / 7f);
+
+        // Wind square magnitude should be the same for all frames - I think! 
+        dynamicPressure = 0.5f * rho * aeroBodyFrame.windVelocity.sqrMagnitude;
     }
 
-    public void GetAeroAngles_6()
+    public void GetAeroAngles_5()
     {
         // Sideslip
-        sideslipRotationVector = Vector3.Cross(Vector3.forward, wind_directionAlongLiftingPlane_zprime) * Vector3.Dot(Vector3.forward, wind_directionAlongLiftingPlane_zprime);
-        beta = Mathf.Atan2(wind_localVelocity.x, wind_localVelocity.z);
+        beta = Mathf.Atan2(aeroBodyFrame.windVelocity.x, aeroBodyFrame.windVelocity.z);
         beta_deg = Mathf.Rad2Deg * beta;
         sinBeta = Mathf.Sin(beta);
         cosBeta = Mathf.Cos(beta);
 
+        // Equivalent Aerodynamic Body is the Body frame rotated by the sideslip angle
+        // I'll bet there's a cheaper way to do this but alas...
+        equivAerobodyFrame.SetFrameRotation(Quaternion.Euler(0, beta_deg, 0));
+        
+        // Resolve the body wind so we have zero sideslip
+        equivAerobodyFrame.SetResolvedWind(aeroBodyFrame.windVelocity, aeroBodyFrame.angularWindVelocity);
+
+        EAB_windVel = equivAerobodyFrame.windVelocity;
+
         // Angle of attack
-        angleOfAttackRotationVector = Vector3.Cross(wind_directionAlongLiftingPlane_zprime, Vector3.down);
-        alpha_deg = Vector3.SignedAngle(wind_localVelocity, wind_directionAlongLiftingPlane_zprime, angleOfAttackRotationVector);
-        alpha = Mathf.Deg2Rad * alpha_deg;
-        //alpha = Mathf.Atan2(-wind_localVelocity.y, wind_directionAlongLiftingPlane_zprime.magnitude);
-        //alpha_deg = Mathf.Rad2Deg * alpha;
+        angleOfAttackRotationVector = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, Vector3.down);
+
+        // Include the minus sign here because alpha goes from the wind vector to the lifting plane
+        alpha = -Mathf.Atan2(equivAerobodyFrame.windVelocity.y, equivAerobodyFrame.windVelocity.z);
+        alpha_deg = Mathf.Rad2Deg * alpha;
         sinAlpha = Mathf.Sin(alpha);
         cosAlpha = Mathf.Cos(alpha);
+
+        // I noticed this happen once but haven't seen it again since, so I'm leaving this just as a precaution
+        if(Mathf.Abs(alpha_deg) > 90f)
+        {
+            Debug.LogError("Angle of attack exceeded +- 90 degrees for " + gameObject.name + ". Please send the object's position, rotation, velocity and angular velocity to Conor.");
+            Debug.Break();
+        }
     }
 
-    public void GetEquivalentAerodynamicBody_7()
+    public void GetEquivalentAerodynamicBody_6()
     {
-        // Work out shape of equivalent aero body
-        // The body has the same aspect ratio and and span as the actual viewed shape but with zero sweep
-
-        // Need to switch to ellipsoid radii instead of diameters
-        ax_a_major = span_a / 2f;
-        ax_b_minor = thickness_b / 2f;
-        ax_c_mid = chord_c / 2f;
+        // The equivalent aerodynamic body has the same aspect ratio and and span
+        // as the actual body's shape, but with zero sideslip
 
         // Resolving in sideslip direction by rotating about the normal to the lift plane
-        ax_c_mid_prime = ax_a_major * ax_c_mid / Mathf.Sqrt((ax_c_mid * ax_c_mid * sinBeta * sinBeta) + (ax_a_major * ax_a_major * cosBeta * cosBeta));
+        EAB.midAxis = aeroBody.majorAxis * aeroBody.midAxis / Mathf.Sqrt((aeroBody.midAxis * aeroBody.midAxis * sinBeta * sinBeta) + (aeroBody.majorAxis * aeroBody.majorAxis * cosBeta * cosBeta));
         // Find major axis based on constant area of ellipse
-        ax_a_major_prime = ax_a_major * ax_c_mid / ax_c_mid_prime;
+        EAB.majorAxis = aeroBody.majorAxis * aeroBody.midAxis / EAB.midAxis;
         // No change to thickness
-        ax_b_minor_prime = ax_b_minor;
+        EAB.minorAxis = aeroBody.minorAxis;
+
+        // Store the diameters as well to save on factor of 2 in equations
+        EAB.span_a = 2f * EAB.majorAxis;
+        EAB.thickness_b = 2f * EAB.minorAxis;
+        EAB.chord_c = 2f * EAB.midAxis;
 
         // Work out aero parameters of equivalent body
-        aspectRatio_prime = ax_a_major_prime / ax_c_mid_prime;
-        thicknessToChordRatio_bOverc_prime = ax_b_minor_prime / ax_c_mid_prime;
-        camberRatio_prime = camberRatio * chord_c / (2f * ax_c_mid_prime);
+        EAB.SetAerodynamicRatios(camber);
 
         // Profile area is the projection in the wind direction
-        profileArea = Vector3.Scale(areaVector, wind_localDirection).magnitude;
+        profileArea = Vector3.Scale(areaVector, aeroBodyFrame.windVelocity_normalised).magnitude;
     }
 
-    public void GetAerodynamicCoefficients_8()
+    
+    public void GetAerodynamicCoefficients_7()
     {
         // Prandtyl Theory
         // Clamp lower value to min AR of 2. Otherwise lift curve slope gets lower than sin 2 alpha which is non physical
-        aspectRatio_clamped = Mathf.Clamp(aspectRatio_prime / (2f + aspectRatio_prime), 0, 1f);
+        // Check for the divide by zero, although I think a zero AR means bigger problems anyway
+        aspectRatioCorrection_kAR = EAB.aspectRatio == 0f ? 0f : Mathf.Clamp(EAB.aspectRatio / (2f + EAB.aspectRatio), 0f, 1f);
 
         // This value needs checking for thickness to chord ratio of 1
 
         // Empirical correction to account for viscous effects across all thickness to chord ratios
-        thicknessCorrection = Mathf.Exp(-thicknessToChordRatio_bOverc_prime * thicknessToChordRatio_bOverc_prime * 6f);
+        thicknessCorrection_kt = Mathf.Exp(-thicknessCorrection_labdat * EAB.thicknessToChordRatio_bOverc * EAB.thicknessToChordRatio_bOverc);
 
         // Emperical relation to allow for viscous effects
         // This could do with being in radians!
-        stallAngle = stallAngleMin + (stallAngleMax - stallAngleMin) * Mathf.Exp(-aspectRatio / 2f);
+        stallAngle = stallAngleMin + (stallAngleMax - stallAngleMin) * Mathf.Exp(-EAB.aspectRatio / 2f);
 
-        // Lifting line theory (I think?)
-        liftCurveSlope = 2f * Mathf.PI * aspectRatio_clamped * thicknessCorrection;
+        // Lifting line theory
+        liftCurveSlope = 2f * Mathf.PI * aspectRatioCorrection_kAR * thicknessCorrection_kt;
 
         // Zero lift angle is set based on the amount of camber. This is physics based
-        alpha_0 = -camberRatio;
+        alpha_0 = -EAB.camberRatio;
 
         // Lift before and after stall
         CL_preStall = liftCurveSlope * (alpha - alpha_0);
-        CL_postStall = 0.5f * CZmax * thicknessCorrection * Mathf.Sin(2f * (alpha - alpha_0));
+        CL_postStall = 0.5f * CZmax * thicknessCorrection_kt * Mathf.Sin(2f * (alpha - alpha_0));
 
         // Sigmoid function for blending between pre and post stall
         // Wasting some calulcations here by converting to degrees...
@@ -392,139 +563,121 @@ public class Aerodynamics : MonoBehaviour
         // Original equation for this is: z_cop = c/8 * (cos(2a) + 1)
         // Using trig identity for cos(2a) =  2*cos^2(a) - 1 to save on extra trig computations
         // Also, ax_c is the axis, not diameter so we x2 again
-        CoP = 0.5f * ax_c_mid_prime * cosAlpha * cosAlpha;
+        CoP_z = 0.5f * EAB.midAxis * cosAlpha * cosAlpha;
 
-        // Pitching moment because lift is treated as acting at the centre of the body
-        CM_delta = CL * CoP * cosAlpha / ax_c_mid_prime;
+        // Pitching moment because lift is applied at the centre of the body
+        CM_delta = CL * CoP_z * cosAlpha / EAB.midAxis;
         CM = CM_0 + CM_delta;
 
         // Shear stress coefficients
         CD_shear_0aoa = 2f * Cf_linear;
-        CD_shear_90aoa = thicknessToChordRatio_bOverc * 2f * Cf_linear;
+        CD_shear_90aoa = EAB.thicknessToChordRatio_bOverc * 2f * Cf_linear;
 
         // Pressure coefficients
-        CD_pressure_0aoa = thicknessToChordRatio_bOverc * CD_roughSphere;
-        CD_pressure_90aoa = CD_normalFlatPlate - thicknessToChordRatio_bOverc * (CD_normalFlatPlate - CD_roughSphere);
+        CD_pressure_0aoa = EAB.thicknessToChordRatio_bOverc * CD_roughSphere;
+        CD_pressure_90aoa = CD_normalFlatPlate - EAB.thicknessToChordRatio_bOverc * (CD_normalFlatPlate - CD_roughSphere);
 
         // An area correction factor is included for the pressure coefficient but is ommitted for the shear coefficient
         // This is because CD_shear_90aoa << CD_pressure_90aoa
-        CD_profile = CD_shear_0aoa + thicknessToChordRatio_bOverc * CD_pressure_0aoa + (CD_shear_90aoa + CD_pressure_90aoa - CD_shear_0aoa - thicknessToChordRatio_bOverc * CD_pressure_0aoa) * sinAlpha * sinAlpha;
-        CD_induced = (1f / (Mathf.PI * aspectRatio_prime)) * CL * CL;
+        CD_profile = CD_shear_0aoa + EAB.thicknessToChordRatio_bOverc * CD_pressure_0aoa + (CD_shear_90aoa + CD_pressure_90aoa - CD_shear_0aoa - EAB.thicknessToChordRatio_bOverc * CD_pressure_0aoa) * sinAlpha * sinAlpha;
+        CD_induced = (1f / (Mathf.PI * EAB.aspectRatio)) * CL * CL;
         CD = CD_profile + CD_induced;
     }
 
-    public void GetShearStressCoefficients_9()
+    public void GetDampingTorques_8()
     {
-        // Linear
-        Cf_linear = reynoldsNum_linear == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_linear, 1f / 7f);
+        // Scale by the direction here to preserve the signs of the angular velocity
+        Vector3 directionalAngularVelocitySquared_bodyFrame = Vector3.Scale(Vector3.Scale(aeroBodyFrame.angularWindVelocity, aeroBodyFrame.angularWindVelocity), aeroBodyFrame.angularWindVelocity_normalised);
 
-        // Rotational
-        Cf_x_rotational = reynoldsNum_x_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_x_rotational, 1f / 7f);
-        Cf_y_rotational = reynoldsNum_y_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_y_rotational, 1f / 7f);
-        Cf_z_rotational = reynoldsNum_z_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_z_rotational, 1f / 7f);
-    }
-
-    public void GetDampingTorques_10()
-    {
-        // How do I know which axes to use in the computation?? It can't be chord * span^4 for every axis!
-
-        /*  Questions/Thoughts
-         *  
-         *      - Why 1/64? I can see 1/16 because that accounts for span = 2a while we only want a
-         *      - Why use pi*a*c/4 and not /2?
-         */
-        float rotationalPressure_x = rho * chord_c * chord_c * chord_c * resolvedAngularVelocitySquared.x;
-        float rotationalPressure_y = rho * span_a * span_a * span_a * resolvedAngularVelocitySquared.y;
-        float rotationalPressure_z = rho * span_a * span_a * span_a * resolvedAngularVelocitySquared.z;
+        float rotationalPressure_x = 0.5f * rho * aeroBody.midAxis * aeroBody.midAxis * aeroBody.midAxis * directionalAngularVelocitySquared_bodyFrame.x;
+        float rotationalPressure_y = 0.5f * rho * aeroBody.majorAxis * aeroBody.majorAxis * aeroBody.majorAxis * directionalAngularVelocitySquared_bodyFrame.y;
+        float rotationalPressure_z = 0.5f * rho * aeroBody.majorAxis * aeroBody.majorAxis * aeroBody.majorAxis * directionalAngularVelocitySquared_bodyFrame.z;
 
         // Pressure torques
-        pressureTorque.x = (1f / 64f) * CD_normalFlatPlate * (areaVector.y / 4f) * rotationalPressure_x;
-        pressureTorque.y = (1f / 64f) * CD_normalFlatPlate * (areaVector.z / 4f) * rotationalPressure_y;
-        pressureTorque.z = (1f / 64f) * CD_normalFlatPlate * (areaVector.y / 4f) * rotationalPressure_z;
+        pressureTorque_bodyFrame.x = CD_normalFlatPlate * (areaVector.y / 2f) * rotationalPressure_x;
+        pressureTorque_bodyFrame.y = CD_normalFlatPlate * (areaVector.z / 2f) * rotationalPressure_y;
+        pressureTorque_bodyFrame.z = CD_normalFlatPlate * (areaVector.y / 2f) * rotationalPressure_z;
 
         // Shear stress torques
-        //shearStressTorque.x = (1f / 128f) * Cf_x * ellipsoidSurfaceArea * rotationalPressure_x;
-        //shearStressTorque.y = (1f / 128f) * Cf_y * ellipsoidSurfaceArea * rotationalPressure_y;
-        //shearStressTorque.z = (1f / 128f) * Cf_z * ellipsoidSurfaceArea * rotationalPressure_z;
-        shearStressTorque.x = (Mathf.PI / 64f) * Cf_x_rotational * ellipsoidSurfaceArea * rotationalPressure_x;
-        shearStressTorque.y = (Mathf.PI / 64f) * Cf_y_rotational * ellipsoidSurfaceArea * rotationalPressure_y;
-        shearStressTorque.z = (Mathf.PI / 64f) * Cf_z_rotational * ellipsoidSurfaceArea * rotationalPressure_z;
+        shearStressTorque_bodyFrame.x = Cf_x_rotational * ellipsoidSurfaceArea * rotationalPressure_x;
+        shearStressTorque_bodyFrame.y = Cf_y_rotational * ellipsoidSurfaceArea * rotationalPressure_y;
+        shearStressTorque_bodyFrame.z = Cf_z_rotational * ellipsoidSurfaceArea * rotationalPressure_z;
 
-        dampingTorque.x = ex2 * pressureTorque.x + (1f - ex2) * shearStressTorque.x;
-        dampingTorque.y = ey2 * pressureTorque.y + (1f - ey2) * shearStressTorque.y;
-        dampingTorque.z = ez2 * pressureTorque.z + (1f - ez2) * shearStressTorque.z;
+        // Blending drag effects based on axis ratios
+        dampingTorque_bodyFrame.x = (1 - lambda_x) * pressureTorque_bodyFrame.x + lambda_x * shearStressTorque_bodyFrame.x;
+        dampingTorque_bodyFrame.y = (1 - lambda_y) * pressureTorque_bodyFrame.y + lambda_y * shearStressTorque_bodyFrame.y;
+        dampingTorque_bodyFrame.z = (1 - lambda_z) * pressureTorque_bodyFrame.z + lambda_z * shearStressTorque_bodyFrame.z;
 
-        // Damping opposes the velocity of the object
-        dampingTorque *= -1f;
     }
-    public Vector3 crossResult;
-    public void GetAerodynamicForces_11()
+
+    public Vector3 pitchingMomentAxis;
+    public void GetAerodynamicForces_9()
     {
         float qS = dynamicPressure * planformArea;
 
-        // Negative inside there because angular velocity of the body is opposite to circulation
-        rotationalMagnusLiftForce = Vector3.Cross(-rho * Vector3.Scale(volumeVector, angularVelocity_referenceAxes), wind_localVelocity);
+        // Minus sign here because in the theory model the body's linear velocity is considered instead of wind
+        // Not sure why this is required though as the angular velocity is the same thing
+        // Also, including the option to turn off this force as it seems to be much larger than regular lift even for small angular velocity
+        rotationalMagnusLiftForce_axbody = includeMagnusEffect ? -rho * Vector3.Cross(aeroBodyFrame.windVelocity, 2f * Vector3.Scale(volumeVector, aeroBodyFrame.angularWindVelocity)) : Vector3.zero;
 
-        Vector3 liftDirection = Vector3.Cross(wind_localDirection, angleOfAttackRotationVector);
+        Vector3 liftDirection = -Vector3.Cross(aeroBodyFrame.windVelocity_normalised, angleOfAttackRotationVector);
 
-        liftForce = CL * qS * liftDirection;
-        dragForce = CD * dynamicPressure * profileArea * wind_localDirection;
-        crossResult = Vector3.Cross(wind_localDirection, wind_directionAlongLiftingPlane_zprime).normalized;
-        momentDueToLift = CM * qS * (2f * ax_c_mid_prime) * crossResult;
+        liftForce_bodyFrame = CL * qS * liftDirection;
+        dragForce_bodyFrame = CD * dynamicPressure * profileArea * aeroBodyFrame.windVelocity_normalised;
+        pitchingMomentAxis = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, new Vector3(0, 0, equivAerobodyFrame.windVelocity_normalised.z)).normalized;
+        momentDueToLift_bodyFrame = CM * qS * EAB.chord_c * pitchingMomentAxis;
 
-        resultantAerodynamicForce_local = liftForce + dragForce; // + rotationalMagnusLiftForce;
-        resultantAerodynamicForce_global = referenceAxesTransform.TransformDirection(resultantAerodynamicForce_local);
+        resultantAerodynamicForce_bodyFrame = liftForce_bodyFrame + dragForce_bodyFrame + rotationalMagnusLiftForce_axbody;
+        resultantAerodynamicForce_earthFrame = TransformBodyToEarth(resultantAerodynamicForce_bodyFrame);
 
-        resultantAerodynamicMoment_local = momentDueToLift + dampingTorque;
-        resultantAerodynamicMoment_global = referenceAxesTransform.TransformDirection(resultantAerodynamicMoment_local);
+        resultantAerodynamicMoment_bodyFrame = momentDueToLift_bodyFrame + dampingTorque_bodyFrame;
+        resultantAerodynamicMoment_earthFrame = TransformBodyToEarth(resultantAerodynamicMoment_bodyFrame);
     }
 
-    public void ApplyAerodynamicForces_12()
+    public void ApplyAerodynamicForces_10()
     {
-        rb.AddForce(resultantAerodynamicForce_global);
-        rb.AddTorque(resultantAerodynamicMoment_global);
+        rb.AddForce(resultantAerodynamicForce_earthFrame);
+        rb.AddTorque(resultantAerodynamicMoment_earthFrame);
     }
 
     public void GetEllipsoid_1_to_2()
     {
-        GetBodyDimensions_1();
+        GetReferenceFrames_1();
         GetEllipsoidProperties_2();
     }
 
-    public void CalculateAerodynamics_3_to_11()
+    public void CalculateAerodynamics_3_to_9()
     {
-        GetLocalWind_3();
-        GetDynamicPressure_4();
-        GetReynoldsNumber_5();
-        GetAeroAngles_6();
-        GetEquivalentAerodynamicBody_7();
-        GetAerodynamicCoefficients_8();
-        GetShearStressCoefficients_9();
-        GetDampingTorques_10();
-        GetAerodynamicForces_11();
+        ResolveWind_3();
+        GetFlowCharacteristics_4();
+        GetAeroAngles_5();
+        GetEquivalentAerodynamicBody_6();
+        GetAerodynamicCoefficients_7();
+        GetDampingTorques_8();
+        GetAerodynamicForces_9();
     }
 
     public void SetAlpha_rad_3_to_6(float alpha_rad)
     {
         // Assumes the body has zero velocity
-        externalWind = new Vector3(0, -Mathf.Sin(alpha_rad), Mathf.Cos(alpha_rad));
+        externalFlowVelocity_inEarthFrame = new Vector3(0, -Mathf.Sin(alpha_rad), Mathf.Cos(alpha_rad));
 
-        GetLocalWind_3();
-        GetDynamicPressure_4();
-        GetReynoldsNumber_5();
-        GetAeroAngles_6();
+        ResolveWind_3();
+        GetFlowCharacteristics_4();
+        GetAeroAngles_5();
+        GetEquivalentAerodynamicBody_6();
     }
 
     public void SetAlpha_deg_3_to_6(float alpha_deg)
     {
         // Assumes the body has zero velocity
         float alpha_rad = Mathf.Deg2Rad * alpha_deg;
-        externalWind = new Vector3(0, -Mathf.Sin(alpha_rad), Mathf.Cos(alpha_rad));
+        externalFlowVelocity_inEarthFrame = new Vector3(0, -Mathf.Sin(alpha_rad), Mathf.Cos(alpha_rad));
 
-        GetLocalWind_3();
-        GetDynamicPressure_4();
-        GetReynoldsNumber_5();
-        GetAeroAngles_6();
+        ResolveWind_3();
+        GetFlowCharacteristics_4();
+        GetAeroAngles_5();
+        GetEquivalentAerodynamicBody_6();
     }
 
     public void Initialise()
@@ -534,21 +687,12 @@ public class Aerodynamics : MonoBehaviour
         {
             Debug.LogWarning("No RigidBody Component found on " + gameObject.name + ", adding one.");
             rb = gameObject.AddComponent<Rigidbody>();
+            rb.angularDrag = 0;
+            rb.drag = 0;
         }
-        //rb.angularDrag = 0;
-        //rb.drag = 0;
-
-        if (!referenceAxesTransform)
-        {
-            GameObject go = new GameObject("Reference Axes");
-            go.transform.parent = transform;
-            referenceAxesTransform = go.transform;
-            referenceAxesTransform.localScale = Vector3.one;
-        }
-        // Not sure which is better for this - we treat centre of mass and centre of geometry as the same thing...
-        referenceAxesTransform.localPosition = Vector3.zero;
 
         GetEllipsoid_1_to_2();
+        initialised = true;
     }
 
 
@@ -560,64 +704,48 @@ public class Aerodynamics : MonoBehaviour
     // Update is called once per frame
     void FixedUpdate()
     {
-        if (variableShape)
+        if (dynamicallyVariableShape)
         {
             GetEllipsoid_1_to_2();
         }
-        CalculateAerodynamics_3_to_11();
-        ApplyAerodynamicForces_12();
+        CalculateAerodynamics_3_to_9();
+        ApplyAerodynamicForces_10();
     }
 
     private void OnDrawGizmosSelected()
     {
-        if (referenceAxesTransform)
-        {
-            /*
+        if (initialised) { 
             // Drag - Red       Lift - Green        Wind - Blue
             Gizmos.color = Color.red;
-            Vector3 dragWorld = referenceAxesTransform.TransformDirection(dragForce);
-            Gizmos.DrawLine(transform.position, transform.position + dragWorld);
+            Vector3 dragForce_axearth = TransformBodyToEarth(dragForce_bodyFrame);
+            Gizmos.DrawLine(transform.position, transform.position + dragForce_axearth);
+
+            // Lift
             Gizmos.color = Color.green;
-            Vector3 liftWorld = referenceAxesTransform.TransformDirection(liftForce);
-            Gizmos.DrawLine(transform.position, transform.position + liftWorld);
+            Vector3 liftForce_axearth = TransformBodyToEarth(liftForce_bodyFrame);
+            Gizmos.DrawLine(transform.position, transform.position + liftForce_axearth);
 
             // Wind vector
             Gizmos.color = Color.blue;
-            Gizmos.DrawLine(transform.position, transform.position - wind_globalVelocity);
+            Gizmos.DrawLine(transform.position, transform.position - earthFrame.windVelocity);
 
+            // Resultant aerodynamic force
             Gizmos.color = Color.cyan;
-            Gizmos.DrawLine(transform.position, transform.position + resultantAerodynamicForce_global);
+            Gizmos.DrawLine(transform.position, transform.position + resultantAerodynamicForce_earthFrame);
 
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(transform.position, transform.position + referenceAxesTransform.TransformDirection(angleOfAttackRotationVector));
+            if (includeMagnusEffect)
+            {
+                // Magnus Lift
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(rotationalMagnusLiftForce_axbody));
+            }
+            //// Angle of attack rotation
+            //Gizmos.color = Color.magenta;
+            //Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(angleOfAttackRotationVector));
 
-            //Gizmos.color = Color.yellow;
-            //Vector3 liftRotationalWorld = referenceAxesTransform.TransformDirection(rotationalMagnusLiftForce);
-            //Gizmos.DrawLine(transform.position, transform.position + liftRotationalWorld);
-
-            Gizmos.color = Color.white;
-            Gizmos.DrawLine(transform.position, transform.position + Vector3.Cross(wind_directionAlongLiftingPlane_zprime, Vector3.down));
-
-            */
-
-
-
-            
-            // Wind vector
-            Gizmos.color = Color.blue;
-            Gizmos.DrawLine(transform.position, transform.position - wind_globalVelocity);
-
-           
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(transform.position, transform.position + referenceAxesTransform.TransformDirection(angleOfAttackRotationVector));
-
-            //Gizmos.color = Color.yellow;
-            //Vector3 liftRotationalWorld = referenceAxesTransform.TransformDirection(rotationalMagnusLiftForce);
-            //Gizmos.DrawLine(transform.position, transform.position + liftRotationalWorld);
-
-            Gizmos.color = Color.white;
-            Gizmos.DrawLine(transform.position, transform.position - referenceAxesTransform.TransformDirection(wind_directionAlongLiftingPlane_zprime));
-
+            //// Pitching moment
+            //Gizmos.color = Color.black;
+            //Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(pitchingMomentAxis));
 
         }
     }
