@@ -152,6 +152,9 @@ public class Aerodynamics : MonoBehaviour
 
         public void SetAerodynamicRatios(float _camber)
         {
+            // The ellipse is awkward and may need to be scaled larger so that the area of the ellipse
+            // and the usual cuboid is the same
+            // We might not show the same ellipsoid body in gizmos as what the code uses
             aspectRatio = span_a / (Mathf.PI * chord_c);
             camberRatio = _camber / chord_c;
             thicknessToChordRatio_bOverc = thickness_b / chord_c;
@@ -205,7 +208,7 @@ public class Aerodynamics : MonoBehaviour
 
     // Sideslip (beta) and angle of attack (alpha) vectors
     Vector3 angleOfAttackRotationVector;                // (unit vector)
-    public float alpha, beta;                           // (rad)
+    public float alpha, alpha_0, beta;                  // (rad)
     public float alpha_deg, beta_deg;                   // (degrees)
     public float sinAlpha, cosAlpha, sinBeta, cosBeta;  // (dimensionless)
 
@@ -246,7 +249,7 @@ public class Aerodynamics : MonoBehaviour
     public float CL_preStall, CL_postStall;     // (dimensionless)
 
     // Blend between pre and post stall
-    public float alpha_0, stallAngle;           // (rad)
+    public float stallAngle;           // (rad)
     public float upperSigmoid, lowerSigmoid;    // (dimensionless)
     public float preStallFilter;                // (dimensionless)
     public float stallAngleMin = 15f;           // (deg)
@@ -430,8 +433,10 @@ public class Aerodynamics : MonoBehaviour
         // before we can resolve the wind into object, body and EAB axes
         GetObjectAxisRotation();
 
+        // In aerodynamics, wind velocity describes the velocity of the body relative to the wind
+
         // Start with earth frame
-        earthFrame.SetResolvedWind(externalFlowVelocity_inEarthFrame - rb.velocity, -rb.angularVelocity);
+        earthFrame.SetResolvedWind(rb.velocity - externalFlowVelocity_inEarthFrame, rb.angularVelocity);
         // Rotate to object frame
         unityObjectFrame.SetResolvedWind(earthFrame.windVelocity, earthFrame.angularWindVelocity);
         // Rotate to body frame
@@ -618,12 +623,12 @@ public class Aerodynamics : MonoBehaviour
         // Minus sign here because in the theory model the body's linear velocity is considered instead of wind
         // Not sure why this is required though as the angular velocity is the same thing
         // Also, including the option to turn off this force as it seems to be much larger than regular lift even for small angular velocity
-        rotationalMagnusLiftForce_axbody = includeMagnusEffect ? -rho * Vector3.Cross(aeroBodyFrame.windVelocity, 2f * Vector3.Scale(volumeVector, aeroBodyFrame.angularWindVelocity)) : Vector3.zero;
+        rotationalMagnusLiftForce_axbody = includeMagnusEffect ? rho * Vector3.Cross(aeroBodyFrame.windVelocity, 2f * Vector3.Scale(volumeVector, aeroBodyFrame.angularWindVelocity)) : Vector3.zero;
 
-        Vector3 liftDirection = -Vector3.Cross(aeroBodyFrame.windVelocity_normalised, angleOfAttackRotationVector);
+        Vector3 liftDirection = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, angleOfAttackRotationVector);
 
         liftForce_bodyFrame = CL * qS * liftDirection;
-        dragForce_bodyFrame = CD * dynamicPressure * profileArea * aeroBodyFrame.windVelocity_normalised;
+        dragForce_bodyFrame = -CD * dynamicPressure * profileArea * aeroBodyFrame.windVelocity_normalised;
         pitchingMomentAxis = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, new Vector3(0, 0, equivAerobodyFrame.windVelocity_normalised.z)).normalized;
         momentDueToLift_bodyFrame = CM * qS * EAB.chord_c * pitchingMomentAxis;
 
@@ -727,7 +732,7 @@ public class Aerodynamics : MonoBehaviour
 
             // Wind vector
             Gizmos.color = Color.blue;
-            Gizmos.DrawLine(transform.position, transform.position - earthFrame.windVelocity);
+            Gizmos.DrawLine(transform.position, transform.position + earthFrame.windVelocity);
 
             // Resultant aerodynamic force
             Gizmos.color = Color.cyan;
