@@ -98,7 +98,13 @@ public class Aerodynamics : MonoBehaviour
     // Converts a vector in EAB frame to earth frame
     public Vector3 TransformEABToEarth(Vector3 vector)
     {
-        return TransformBodyToEarth(equivAerobodyFrame.inverseObjectToFrameRotation * vector);
+        return TransformBodyToEarth(TransformEABToBody(vector));
+    }
+
+    // Converts a vector in EAB frame to body frame
+    public Vector3 TransformEABToBody(Vector3 vector)
+    {
+        return equivAerobodyFrame.inverseObjectToFrameRotation * vector;
     }
 
     // Converts a vector in aeroBody frame to earth frame
@@ -279,6 +285,7 @@ public class Aerodynamics : MonoBehaviour
     // calculate them in EAB frame - so no forces would exist there
     public Vector3 dragForce_bodyFrame, liftForce_bodyFrame, rotationalMagnusLiftForce_axbody;                                  // (N)
     public Vector3 dampingTorque_bodyFrame, pressureTorque_bodyFrame, shearStressTorque_bodyFrame, momentDueToLift_bodyFrame;   // (Nm)
+    public Vector3 momentDueToLift_eabFrame;                                                                                    // (Nm)
 
     public Vector3 resultantAerodynamicForce_earthFrame, resultantAerodynamicForce_bodyFrame;                                   // (N)
     public Vector3 resultantAerodynamicMoment_earthFrame, resultantAerodynamicMoment_bodyFrame;                                 // (Nm)
@@ -437,6 +444,25 @@ public class Aerodynamics : MonoBehaviour
 
         // Start with earth frame
         earthFrame.SetResolvedWind(rb.velocity - externalFlowVelocity_inEarthFrame, rb.angularVelocity);
+        // Rotate to object frame
+        unityObjectFrame.SetResolvedWind(earthFrame.windVelocity, earthFrame.angularWindVelocity);
+        // Rotate to body frame
+        aeroBodyFrame.SetResolvedWind(unityObjectFrame.windVelocity, unityObjectFrame.angularWindVelocity);
+    }
+
+    public void SetWind_3(Vector3 wind, Vector3 angularWind)
+    {
+        // This is an alternative to getting the wind according to the rigid body velocity
+        // here the external wind is simply passed in. This is used for experiments and tests
+
+        // Putting this here because it's definitely going to be called and it needs doing
+        // before we can resolve the wind into object, body and EAB axes
+        GetObjectAxisRotation();
+
+        // In aerodynamics, wind velocity describes the velocity of the body relative to the wind
+
+        // Start with earth frame
+        earthFrame.SetResolvedWind(wind, angularWind);
         // Rotate to object frame
         unityObjectFrame.SetResolvedWind(earthFrame.windVelocity, earthFrame.angularWindVelocity);
         // Rotate to body frame
@@ -620,22 +646,26 @@ public class Aerodynamics : MonoBehaviour
     {
         float qS = dynamicPressure * planformArea;
 
-        // Minus sign here because in the theory model the body's linear velocity is considered instead of wind
+        // Minus sign here because... I don't really know ha!
         // Not sure why this is required though as the angular velocity is the same thing
         // Also, including the option to turn off this force as it seems to be much larger than regular lift even for small angular velocity
-        rotationalMagnusLiftForce_axbody = includeMagnusEffect ? rho * Vector3.Cross(aeroBodyFrame.windVelocity, 2f * Vector3.Scale(volumeVector, aeroBodyFrame.angularWindVelocity)) : Vector3.zero;
+        rotationalMagnusLiftForce_axbody = includeMagnusEffect ? -rho * Vector3.Cross(aeroBodyFrame.windVelocity, 2f * Vector3.Scale(volumeVector, aeroBodyFrame.angularWindVelocity)) : Vector3.zero;
 
         Vector3 liftDirection = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, angleOfAttackRotationVector);
 
         liftForce_bodyFrame = CL * qS * liftDirection;
         dragForce_bodyFrame = -CD * dynamicPressure * profileArea * aeroBodyFrame.windVelocity_normalised;
+
+        // We might be able to get rid of this line...
         pitchingMomentAxis = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, new Vector3(0, 0, equivAerobodyFrame.windVelocity_normalised.z)).normalized;
-        momentDueToLift_bodyFrame = CM * qS * EAB.chord_c * pitchingMomentAxis;
+        momentDueToLift_eabFrame = new Vector3(CM * qS * EAB.chord_c, 0, 0);
+        momentDueToLift_bodyFrame = TransformEABToBody(momentDueToLift_eabFrame);
 
         resultantAerodynamicForce_bodyFrame = liftForce_bodyFrame + dragForce_bodyFrame + rotationalMagnusLiftForce_axbody;
         resultantAerodynamicForce_earthFrame = TransformBodyToEarth(resultantAerodynamicForce_bodyFrame);
 
-        resultantAerodynamicMoment_bodyFrame = momentDueToLift_bodyFrame + dampingTorque_bodyFrame;
+        // Note the minus sign here because damping torque opposes the rotational velocity (angular wind) of the body
+        resultantAerodynamicMoment_bodyFrame = momentDueToLift_bodyFrame - dampingTorque_bodyFrame;
         resultantAerodynamicMoment_earthFrame = TransformBodyToEarth(resultantAerodynamicMoment_bodyFrame);
     }
 
@@ -748,9 +778,9 @@ public class Aerodynamics : MonoBehaviour
             //Gizmos.color = Color.magenta;
             //Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(angleOfAttackRotationVector));
 
-            //// Pitching moment
-            //Gizmos.color = Color.black;
-            //Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(pitchingMomentAxis));
+            // Pitching moment
+            Gizmos.color = Color.black;
+            Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(pitchingMomentAxis));
 
         }
     }
