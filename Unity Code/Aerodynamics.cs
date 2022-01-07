@@ -641,7 +641,7 @@ public class Aerodynamics : MonoBehaviour
 
     }
 
-    public Vector3 pitchingMomentAxis;
+    //public Vector3 pitchingMomentAxis;
     public void GetAerodynamicForces_9()
     {
         float qS = dynamicPressure * planformArea;
@@ -657,8 +657,10 @@ public class Aerodynamics : MonoBehaviour
         dragForce_bodyFrame = -CD * dynamicPressure * profileArea * aeroBodyFrame.windVelocity_normalised;
 
         // We might be able to get rid of this line...
-        pitchingMomentAxis = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, new Vector3(0, 0, equivAerobodyFrame.windVelocity_normalised.z)).normalized;
-        momentDueToLift_eabFrame = new Vector3(CM * qS * EAB.chord_c, 0, 0);
+        //pitchingMomentAxis = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, new Vector3(0, 0, equivAerobodyFrame.windVelocity_normalised.z)).normalized;
+
+        // The minus sign here is dirty but I can't figure out why the pitching moment is always in the wrong direction?!
+        momentDueToLift_eabFrame = new Vector3(-CM * qS * EAB.chord_c, 0, 0);
         momentDueToLift_bodyFrame = TransformEABToBody(momentDueToLift_eabFrame);
 
         resultantAerodynamicForce_bodyFrame = liftForce_bodyFrame + dragForce_bodyFrame + rotationalMagnusLiftForce_axbody;
@@ -778,9 +780,13 @@ public class Aerodynamics : MonoBehaviour
             //Gizmos.color = Color.magenta;
             //Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(angleOfAttackRotationVector));
 
-            // Pitching moment
+            //// Pitching moment
+            //Gizmos.color = Color.black;
+            //Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(pitchingMomentAxis));
+
+            // EAB Forward
             Gizmos.color = Color.black;
-            Gizmos.DrawLine(transform.position, transform.position + TransformBodyToEarth(pitchingMomentAxis));
+            Gizmos.DrawLine(transform.position, transform.position + TransformEABToEarth(Vector3.forward));
 
         }
     }
