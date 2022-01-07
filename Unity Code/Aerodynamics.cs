@@ -248,7 +248,7 @@ public class Aerodynamics : MonoBehaviour
 
     // Lift and rotational lift
     public float CL;                            // (dimensionless)
-    public float CLr;                           // (dimensionless)
+    public Vector3 CLr;                           // (dimensionless)
     public float CLmax = 1.2f;                  // (dimensionless)
     public float CZmax = 1.2f;                  // (dimensionless)
     public float liftCurveSlope;                // (dimensionless)
@@ -613,6 +613,16 @@ public class Aerodynamics : MonoBehaviour
         CD_profile = CD_shear_0aoa + EAB.thicknessToChordRatio_bOverc * CD_pressure_0aoa + (CD_shear_90aoa + CD_pressure_90aoa - CD_shear_0aoa - EAB.thicknessToChordRatio_bOverc * CD_pressure_0aoa) * sinAlpha * sinAlpha;
         CD_induced = (1f / (Mathf.PI * EAB.aspectRatio)) * CL * CL;
         CD = CD_profile + CD_induced;
+
+
+
+        // This isn't really necessary.. I mean most of the coefficient stuff could probably be made more
+        // efficient as the model just needs the forces. However, having the coefficients helps to validate
+        // the model and make sure that the forces coming out of it are reasonable!
+
+        // Magnus effect coefficient
+        Vector3 RHO = Vector3.Scale(volumeVector, aeroBodyFrame.angularWindVelocity);
+        CLr = 4f * Vector3.Cross(aeroBodyFrame.windVelocity, RHO) / (aeroBodyFrame.windVelocity.sqrMagnitude * planformArea);
     }
 
     public void GetDampingTorques_8()
@@ -641,7 +651,6 @@ public class Aerodynamics : MonoBehaviour
 
     }
 
-    //public Vector3 pitchingMomentAxis;
     public void GetAerodynamicForces_9()
     {
         float qS = dynamicPressure * planformArea;
@@ -656,16 +665,13 @@ public class Aerodynamics : MonoBehaviour
         liftForce_bodyFrame = CL * qS * liftDirection;
         dragForce_bodyFrame = -CD * dynamicPressure * profileArea * aeroBodyFrame.windVelocity_normalised;
 
-        // We might be able to get rid of this line...
-        //pitchingMomentAxis = Vector3.Cross(aeroBodyFrame.windVelocity_normalised, new Vector3(0, 0, equivAerobodyFrame.windVelocity_normalised.z)).normalized;
-
         // The minus sign here is dirty but I can't figure out why the pitching moment is always in the wrong direction?!
         momentDueToLift_eabFrame = new Vector3(-CM * qS * EAB.chord_c, 0, 0);
         momentDueToLift_bodyFrame = TransformEABToBody(momentDueToLift_eabFrame);
 
+        // Transform forces and moments to earth frame
         resultantAerodynamicForce_bodyFrame = liftForce_bodyFrame + dragForce_bodyFrame + rotationalMagnusLiftForce_axbody;
         resultantAerodynamicForce_earthFrame = TransformBodyToEarth(resultantAerodynamicForce_bodyFrame);
-
         // Note the minus sign here because damping torque opposes the rotational velocity (angular wind) of the body
         resultantAerodynamicMoment_bodyFrame = momentDueToLift_bodyFrame - dampingTorque_bodyFrame;
         resultantAerodynamicMoment_earthFrame = TransformBodyToEarth(resultantAerodynamicMoment_bodyFrame);
@@ -738,7 +744,6 @@ public class Aerodynamics : MonoBehaviour
         Initialise();
     }
 
-    // Update is called once per frame
     void FixedUpdate()
     {
         if (dynamicallyVariableShape)
