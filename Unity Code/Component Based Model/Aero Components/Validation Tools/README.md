@@ -1,2 +1,4 @@
-# Aerodynamic Objects
-A low order, approximate aerodynamics model for rigid bodies simulated in Unity.
+# Validation Tools
+Validation tools derive from the ValidationTool class which implements a ValidateModel function, used to quickly produce plots for various variables of interest in the corresponding component. These tools use Unity's AnimationCurve component to draw quick and dirty plots for variables of interest. Validation tools are hard coded for each component type as the variables of interest do not generalise. Most of the interesting stuff depends on the angle of attack (alpha), however, this is not always the case so we leave the validation development to the programmer.
+
+The AeroBody class has an editor script included which checks for any validation tools attached to the game object. If there are any tools, a "Validate Models" button is added to the bottom of the AeroBody inspector which will call all of the validation tools' ValidateModel functions, allowing for a quick check for sensible plots.
