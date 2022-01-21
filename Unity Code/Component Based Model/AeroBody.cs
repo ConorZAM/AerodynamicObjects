@@ -556,13 +556,16 @@ public class AeroBody : MonoBehaviour
 
     public void Initialise()
     {
-        rb = GetComponent<Rigidbody>();
-        if (!rb)
+        if(!rb)
         {
-            Debug.LogWarning("No RigidBody Component found on " + gameObject.name + ", adding one.");
-            rb = gameObject.AddComponent<Rigidbody>();
-            rb.angularDrag = 0;
-            rb.drag = 0;
+            rb = GetComponent<Rigidbody>();
+            if (!rb)
+            {
+                Debug.LogWarning("No RigidBody Component found on " + gameObject.name + ", adding one.");
+                rb = gameObject.AddComponent<Rigidbody>();
+                rb.angularDrag = 0;
+                rb.drag = 0;
+            }
         }
 
         GetEllipsoid_1_to_2();
