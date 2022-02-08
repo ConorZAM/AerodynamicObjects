@@ -4,7 +4,7 @@ using UnityEngine;
 
 public static class ArrowSettings
 {
-    public static float arrowAspectRatio = 0.25f;
+    //public static float scale = 1f;
     public static float arrowAlpha = 0.5f;
     public static Color liftColour = new Color(0, 1, 0, arrowAlpha);
     public static Color dragColour = new Color(1, 0, 0, arrowAlpha);

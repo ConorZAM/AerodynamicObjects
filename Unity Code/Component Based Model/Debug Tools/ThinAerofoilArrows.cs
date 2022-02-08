@@ -22,8 +22,8 @@ public class ThinAerofoilArrows : ComponentArrows
         component = GetComponent<ThinAerofoilComponent>();
         aeroBody = GetComponent<AeroBody>();
 
-        LiftArrow = new Arrow(arrowHead, arrowBody, ArrowSettings.liftColour);
-        InducedDragArrow = new Arrow(arrowHead, arrowBody, ArrowSettings.dragColour);
+        LiftArrow = new Arrow(arrowHead, arrowBody, ArrowSettings.liftColour,"LiftArrow",aeroBody.transform);
+        InducedDragArrow = new Arrow(arrowHead, arrowBody, ArrowSettings.dragColour,"InducedDragArrow", aeroBody.transform);
     }
 
 
@@ -32,7 +32,18 @@ public class ThinAerofoilArrows : ComponentArrows
         Vector3 centreOfPressure_earthFrame = aeroBody.transform.position + aeroBody.TransformEABToEarth(new Vector3(0, 0, component.CoP_z));
         Vector3 lift_earthFrame = aeroBody.TransformBodyToEarth(component.lift_bodyFrame);
         Vector3 inducedDrag_earthFrame = aeroBody.TransformBodyToEarth(component.inducedDrag_bodyFrame);
-        LiftArrow.SetPositionAndRotation((1f / scaling) * ArrowSettings.arrowAspectRatio, lift_earthFrame.magnitude / scaling, centreOfPressure_earthFrame, lift_earthFrame.normalized);
-        InducedDragArrow.SetPositionAndRotation((1f / scaling) * ArrowSettings.arrowAspectRatio, inducedDrag_earthFrame.magnitude / scaling, centreOfPressure_earthFrame, inducedDrag_earthFrame.normalized);
+        var radius = scale;
+        var length= lift_earthFrame.magnitude * sensitivity;
+        var rootPosition = centreOfPressure_earthFrame + lift_earthFrame.normalized * (length + offset);
+        var direction = lift_earthFrame.normalized;
+        LiftArrow.SetPositionAndRotation(radius ,length , rootPosition,direction );
+
+        radius =  scale;
+        length = inducedDrag_earthFrame.magnitude * sensitivity;
+        rootPosition = centreOfPressure_earthFrame + inducedDrag_earthFrame.normalized * (length+offset);
+        direction = inducedDrag_earthFrame.normalized;
+
+        InducedDragArrow.SetPositionAndRotation(radius, length, rootPosition, direction);
+
     }
 }

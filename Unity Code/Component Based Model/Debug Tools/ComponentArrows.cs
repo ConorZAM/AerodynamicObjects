@@ -9,7 +9,7 @@ public class ComponentArrows : MonoBehaviour
     // For this there will be a static ArrowSettings class which has all the colour information
     // as well as scaling rules and such
 
-    public float scaling = 1f;
+    public float sensitivity = 1f, scale=1, offset=1;
     public GameObject arrowHead;
     public GameObject arrowBody;
 
@@ -19,10 +19,18 @@ public class ComponentArrows : MonoBehaviour
         Transform body;
         Transform head;
 
-        public Arrow(GameObject _head, GameObject _body, Color color)
+        public Arrow(GameObject _head, GameObject _body, Color color, string name, Transform parentObject)
         {
+            
+            
+            Transform arrowTF=new GameObject().transform;
+            arrowTF.name = name;
             body = Instantiate(_body).transform;
             head = Instantiate(_head).transform;
+
+            body.parent = arrowTF;
+            head.parent = arrowTF;
+            arrowTF.parent = parentObject;
 
             // Set colour and shader to fade
             body.GetChild(0).GetComponent<MeshRenderer>().materials[0].color = color;
@@ -39,9 +47,9 @@ public class ComponentArrows : MonoBehaviour
             body.position = rootPosition;
             body.up = direction;
             // Half because cyllinder
-            body.localScale = new Vector3(radius, 0.5f * length, radius);
+            body.localScale =  new Vector3(radius, 0.5f * length, radius);
 
-            head.position = body.position + direction * length;
+            head.position = rootPosition;// body.position + direction * length;
             head.up = direction;
             head.localScale = new Vector3(radius, radius, radius);
         }

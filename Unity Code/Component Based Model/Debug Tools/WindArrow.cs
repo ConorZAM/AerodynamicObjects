@@ -13,16 +13,16 @@ public class WindArrow : ComponentArrows
     {
         aeroBody = GetComponent<AeroBody>();
 
-        windArrow = new Arrow(arrowHead, arrowBody, ArrowSettings.windColour);
+        windArrow = new Arrow(arrowHead, arrowBody, ArrowSettings.windColour,"WindArrow", aeroBody.transform);
     }
 
 
     void FixedUpdate()
     {
-        float windLength = aeroBody.earthFrame.windVelocity.magnitude / scaling;
+        float windLength = aeroBody.earthFrame.windVelocity.magnitude ;
         Vector3 windDir = -aeroBody.earthFrame.windVelocity_normalised;
-        Vector3 arrowRoot = aeroBody.transform.position - windLength * windDir;
+        Vector3 arrowRoot = aeroBody.transform.position - offset* windDir;
 
-        windArrow.SetPositionAndRotation((1f/scaling) * ArrowSettings.arrowAspectRatio, windLength, arrowRoot, windDir);
+        windArrow.SetPositionAndRotation(scale, windLength*sensitivity, arrowRoot, windDir);
     }
 }
