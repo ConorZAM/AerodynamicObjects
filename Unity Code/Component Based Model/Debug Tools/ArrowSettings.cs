@@ -6,9 +6,11 @@ public static class ArrowSettings
 {
     //public static float scale = 1f;
     public static float arrowAlpha = 0.5f;
+    public static float wedgeAlpha = 0.4f;
     public static Color liftColour = new Color(0, 1, 0, arrowAlpha);
     public static Color dragColour = new Color(1, 0, 0, arrowAlpha);
     public static Color windColour = new Color(0, 1, 1, arrowAlpha);
+    public static Color angleOfAttackWedgeColour = new Color(1, 1, 0, wedgeAlpha);
 
     public static void ToFadeMode(this Material material)
     {

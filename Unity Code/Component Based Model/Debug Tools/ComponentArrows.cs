@@ -12,6 +12,7 @@ public class ComponentArrows : MonoBehaviour
     public float sensitivity = 1f, scale=1, offset=1;
     public GameObject arrowHead;
     public GameObject arrowBody;
+    
 
 
     public class Arrow
