@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class LinearDragComponent : AerodynamicComponent
+public class TranslationalDragComponent : AerodynamicComponent
 {
     // Drag
     public float CD;                                    // (dimensionless)

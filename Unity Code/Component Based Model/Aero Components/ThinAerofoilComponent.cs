@@ -31,6 +31,9 @@ public class ThinAerofoilComponent : AerodynamicComponent
     public float CM_0, CM_delta;                // (dimensionless)
     public float CoP_z;                         // (m)
 
+    public Vector3 lift_bodyFrame;              // (Nm)
+    public Vector3 inducedDrag_bodyFrame;       // (Nm)
+
     public override void RunModel(AeroBody aeroBody)
     {
         // Prandtyl Theory
@@ -83,8 +86,8 @@ public class ThinAerofoilComponent : AerodynamicComponent
         // Convert coefficients to forces and moments
         float qS = aeroBody.dynamicPressure * aeroBody.planformArea;
         Vector3 liftDirection = Vector3.Cross(aeroBody.aeroBodyFrame.windVelocity_normalised, aeroBody.angleOfAttackRotationVector);
-        Vector3 lift_bodyFrame = qS * CL * liftDirection;
-        Vector3 inducedDrag_bodyFrame = -CD_induced * aeroBody.dynamicPressure * aeroBody.profileArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
+        lift_bodyFrame = qS * CL * liftDirection;
+        inducedDrag_bodyFrame = -CD_induced * aeroBody.dynamicPressure * aeroBody.profileArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
         resultantForce_bodyFrame = lift_bodyFrame + inducedDrag_bodyFrame;
 
         // The minus sign here is dirty but I can't figure out why the pitching moment is always in the wrong direction?!
