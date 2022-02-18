@@ -27,6 +27,8 @@ public class ComponentArrows : MonoBehaviour
         // Direction MUST BE NORMALISED
         direction.Normalize();
 
+        length = length * sensitivity;
+
         if (pointAtPoint)
         {
             rootPosition = rootPosition - length * direction;
@@ -52,7 +54,7 @@ public class ComponentArrows : MonoBehaviour
         // of having to do it in every function in the higher upss
 
         Vector3 direction = vector.normalized;
-        float length = vector.magnitude;
+        float length = vector.magnitude * sensitivity;
 
         if (pointAtPoint)
         {
