@@ -13,13 +13,13 @@ public class LinearDragValidation : ValidationTool
 
     public LinearDragValidation()
     {
-        componentType = typeof(LinearDragComponent);
+        componentType = typeof(TranslationalDragComponent);
     }
 
 
     public override void ValidateModel(AeroBody aeroBody, AerodynamicComponent component)
     {
-        LinearDragComponent linearDragComponent = (LinearDragComponent)component;
+        TranslationalDragComponent linearDragComponent = (TranslationalDragComponent)component;
         ResetPlots();
         // The veloicty of the body, we're assuming that the body and earth frames are
         // lined up when running this experiment for simplicity. We could force the rotation

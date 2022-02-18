@@ -19,7 +19,7 @@ public class AeroBodyEditor : Editor
 
         ValidationTool[] validationTools = aeroBody.gameObject.GetComponents<ValidationTool>();
 
-        if (validationTools.Length > 0 && GUILayout.Button("Validate Model"))
+        if (validationTools.Length > 0 && GUILayout.Button("Validate Models"))
         {
             // Make sure the body is ready
             aeroBody.Initialise();
