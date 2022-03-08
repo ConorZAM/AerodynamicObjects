@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class LinearDragValidation : ValidationTool
+public class TranslationalDragValidation : ValidationTool
 {
 
     public AnimationCurve alphaCdPressure0Plot;
@@ -11,7 +11,7 @@ public class LinearDragValidation : ValidationTool
     public AnimationCurve alphaCdSkinFriction90Plot;
     public AnimationCurve alphaCdPlot;
 
-    public LinearDragValidation()
+    public TranslationalDragValidation()
     {
         componentType = typeof(TranslationalDragComponent);
     }

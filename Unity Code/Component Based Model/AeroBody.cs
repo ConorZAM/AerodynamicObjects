@@ -4,15 +4,24 @@ using UnityEngine;
 
 public class AeroBody : MonoBehaviour
 {
-    /* The AeroBody class is responsible for all of the coordinate transformations
-     * and the resolution of the wind velocity. The AeroBody holds the dimensions of
-     * the object and the resolved dimensions of the equivalent aerodynamic body.
+    /* The AeroBody class is responsible for:
+     * - coordinate transformations
+     * - resolution of the wind velocity
+     * - tracking velocity of the body when a rigid body is not provided
+     * 
+     * The AeroBody maintains:
+     * - dimensions of the object
+     * - resolved dimensions of the equivalent aerodynamic body
+     * 
      * Aerodynamics Components are added to an AeroBody to apply forces and moments to
-     * the body based on its dimensions and the wind properties.
+     * the body based on its dimensions and the wind properties according to the component model
+     * 
      */
 
     // Debugging Values
     public Vector3 EAB_windVel;
+
+    public Vector3 earthVelocity;
 
 
     // For testing purposes all variables and functions are made public
@@ -23,10 +32,14 @@ public class AeroBody : MonoBehaviour
     //      Unity Related Components
     //  -------------------------------------------------------------------------------------------
 
-    // This should remain hidden as the actual components attached to the game object are a list themselves
+    // Array of all the components used to compute the aerodynamics for this object
+    // This should remain hidden as components are also attached to the object and
+    // are retrieved in code rather than being assigned by the user
     AerodynamicComponent[] aerodynamicComponents = new AerodynamicComponent[0];
 
-    // Unity's physics body, used to apply physics to the object
+    // Unity's physics body, used to apply physics to the object - We're going to assume that all
+    // objects connected to a rigidbody are fixed and cannot move independently from the rigid body
+    // This means that WE CAN'T MODEL FLAPPING WINGS OR FLEXIBLE WINGS using this method
     public Rigidbody rb;
 
     // Flag to determine if the model needs to recalculate dimensions at runtime
@@ -386,8 +399,12 @@ public class AeroBody : MonoBehaviour
 
         // In aerodynamics, wind velocity describes the velocity of the body relative to the wind
 
+        // Using the transform position here so we can have aero body components separate from rigid bodies
+        // and everything should still work
+        earthVelocity = rb.GetPointVelocity(transform.position);
+
         // Start with earth frame
-        earthFrame.SetResolvedWind(rb.velocity - externalFlowVelocity_inEarthFrame, rb.angularVelocity);
+        earthFrame.SetResolvedWind(earthVelocity - externalFlowVelocity_inEarthFrame, rb.angularVelocity);
         // Rotate to object frame
         unityObjectFrame.SetResolvedWind(earthFrame.windVelocity, earthFrame.angularWindVelocity);
         // Rotate to body frame
@@ -508,7 +525,15 @@ public class AeroBody : MonoBehaviour
 
     public void ApplyAerodynamicForces_8()
     {
-        rb.AddForce(resultantAerodynamicForce_earthFrame);
+        // Now that we're considering the aero body and rigid body separately,
+        // we need to apply forces at positions instead of directly to the rigid body
+
+        // This is what we used to do
+        //rb.AddForce(resultantAerodynamicForce_earthFrame);
+        //rb.AddTorque(resultantAerodynamicMoment_earthFrame);
+
+        // Again, we're using the transform's position here as the aero body position
+        rb.AddForceAtPosition(resultantAerodynamicForce_earthFrame, transform.position);
         rb.AddTorque(resultantAerodynamicMoment_earthFrame);
     }
 
@@ -556,15 +581,26 @@ public class AeroBody : MonoBehaviour
 
     public void Initialise()
     {
+        // At the moment, we need a rigid body for our velocity etc. Eventually I might be persuaded
+        // into adding a kinematic component which keeps track of velocity for us.
         if(!rb)
         {
+            // Check if there's a rigid body attached to the same game object
             rb = GetComponent<Rigidbody>();
+
             if (!rb)
             {
-                Debug.LogWarning("No RigidBody Component found on " + gameObject.name + ", adding one.");
-                rb = gameObject.AddComponent<Rigidbody>();
-                rb.angularDrag = 0;
-                rb.drag = 0;
+                // Check all the parents of this object for a rigid body component
+                rb = GetComponentInParent<Rigidbody>();
+
+                if (!rb)
+                {
+                    // Add a rigid body if we can't find one anywhere
+                    Debug.LogWarning("No RigidBody Component found for " + gameObject.name + ", adding one.");
+                    rb = gameObject.AddComponent<Rigidbody>();
+                    rb.angularDrag = 0;
+                    rb.drag = 0;
+                }
             }
         }
 
