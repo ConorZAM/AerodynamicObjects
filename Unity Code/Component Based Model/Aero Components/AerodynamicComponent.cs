@@ -8,9 +8,13 @@ public class AerodynamicComponent : MonoBehaviour
 {
     /* This component is the base class for all of the aerodynamics
      * models that are included in the Aerodynamic Objects package
-     * Each component can be added to an AeroBody, increasing the
-     * fidelity of the aerodynamics model used to simulate the
-     * AeroBody's motion.
+     * 
+     * Components can be added to an AeroBody, increasing the
+     * fidelity of the overall aerodynamics model used to simulate the
+     * AeroBody's motion. Note that including components like this means
+     * the models cannot interact with each other, a component must include
+     * all interactions within itself. For example, the lift induced drag
+     * must be included in the lift model component, not the drag component
      */
 
     // The resultant forces and moments of an aerodynamic component should be
@@ -19,17 +23,45 @@ public class AerodynamicComponent : MonoBehaviour
     public Vector3 resultantForce_bodyFrame;
     public Vector3 resultantMoment_bodyFrame;
 
+    // These components make more sense for applying forces to rigidbodies which do not align with
+    // the aero body frame!
+    public Vector3 resultantForce_earthFrame;
+    public Vector3 forcePointOfAction_earthFrame;
 
     public virtual void RunModel(AeroBody aeroBody)
     {
         // This function will use the wind and dimensions of the AeroBody to
         // compute the relevant forces and moments for the component
-
     }
 
-    private void Reset()
+    public virtual void ApplyForces(Rigidbody rigidbody)
     {
-        AeroBody body = GetComponent<AeroBody>();
-        body.GetAeroComponents();
+        // This function allows for centre of pressure force application
+        // Not sure how to account for moment due to camber though...
+        rigidbody.AddForceAtPosition(resultantForce_earthFrame, forcePointOfAction_earthFrame);
+    }
+
+    private void OnEnable()
+    {
+        SubscribeToAeroEvents();
+    }
+
+    private void OnDisable()
+    {
+        UnSubscribeFromAeroEvents();
+    }
+
+    void SubscribeToAeroEvents()
+    {
+        // Don't need to check for null reference here as these components require an AeroBody
+        GetComponent<AeroBody>().runModelEvent += RunModel;
+        GetComponent<AeroBody>().applyForcesEvent += ApplyForces;
+    }
+
+    void UnSubscribeFromAeroEvents()
+    {
+        // Don't need to check for null reference here as these components require an AeroBody
+        GetComponent<AeroBody>().runModelEvent -= RunModel;
+        GetComponent<AeroBody>().applyForcesEvent -= ApplyForces;
     }
 }

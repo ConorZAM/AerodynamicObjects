@@ -16,35 +16,44 @@ public class AeroBody : MonoBehaviour
      * Aerodynamics Components are added to an AeroBody to apply forces and moments to
      * the body based on its dimensions and the wind properties according to the component model
      * 
+     * For testing purposes all variables and functions are made public
+     * This allows for easy probing of the aerodynamic model
+     * 
      */
 
     // Debugging Values
     public Vector3 EAB_windVel;
-
     public Vector3 earthVelocity;
 
 
-    // For testing purposes all variables and functions are made public
-    // This allows for easy probing of the aerodynamic model
+    #region Component Computation and Apply Force Events
 
+    /* The AeroBody has two events:
+     * - Run Model Computations
+     * - Apply Model Forces
+     * 
+     * Run Model Computations is called after all the ellipsoid properties are computed and the
+     * wind has been resolved. Essentially, all the information needed by each aerodynamic component
+     * is ready to be used.
+     * 
+     * Apply Model Forces should be called straight after the model computations are complete,
+     * then each aerodynamic component applies its computed forces to the rigid body
+     * 
+     * This method is implemented to avoid management of all the aerodynamic components attached to the
+     * object - we can also handle the addition and subtraction of components in runtime by using events
+     */
 
-    //  -------------------------------------------------------------------------------------------
-    //      Unity Related Components
-    //  -------------------------------------------------------------------------------------------
+    // The computation of aerodynamic forces and moments requires the information from the aero body
+    public delegate void RunModelComputations(AeroBody aeroBody);
+    public RunModelComputations runModelEvent;
 
-    // Array of all the components used to compute the aerodynamics for this object
-    // This should remain hidden as components are also attached to the object and
-    // are retrieved in code rather than being assigned by the user
-    AerodynamicComponent[] aerodynamicComponents = new AerodynamicComponent[0];
+    // After the forces and moments are computed, they need to be applied to the appropriate rigid body
+    public delegate void ApplyModelForces(Rigidbody rb);
+    public ApplyModelForces applyForcesEvent;
 
-    // Unity's physics body, used to apply physics to the object - We're going to assume that all
-    // objects connected to a rigidbody are fixed and cannot move independently from the rigid body
-    // This means that WE CAN'T MODEL FLAPPING WINGS OR FLEXIBLE WINGS using this method
-    public Rigidbody rb;
+    #endregion Component Computation and Apply Force Events
 
-    // Flag to determine if the model needs to recalculate dimensions at runtime
-    public bool dynamicallyVariableShape;
-    public bool initialised = false;
+    #region Reference Frames
 
     //  -------------------------------------------------------------------------------------------
     //      Reference Frames
@@ -111,19 +120,19 @@ public class AeroBody : MonoBehaviour
     }
 
     // Converts a vector in EAB frame to earth frame
-    public Vector3 TransformEABToEarth(Vector3 vector)
+    public Vector3 TransformDirectionEABToEarth(Vector3 vector)
     {
-        return TransformBodyToEarth(TransformEABToBody(vector));
+        return TransformDirectionBodyToEarth(TransformDirectionEABToBody(vector));
     }
 
     // Converts a vector in EAB frame to body frame
-    public Vector3 TransformEABToBody(Vector3 vector)
+    public Vector3 TransformDirectionEABToBody(Vector3 vector)
     {
         return equivAerobodyFrame.inverseObjectToFrameRotation * vector;
     }
 
     // Converts a vector in aeroBody frame to earth frame
-    public Vector3 TransformBodyToEarth(Vector3 vector)
+    public Vector3 TransformDirectionBodyToEarth(Vector3 vector)
     {
         return unityObjectFrame.inverseObjectToFrameRotation * (aeroBodyFrame.inverseObjectToFrameRotation * vector);
     }
@@ -134,6 +143,25 @@ public class AeroBody : MonoBehaviour
         unityObjectFrame.SetFrameRotation(transform.rotation);
     }
 
+    // Earth is just Unity's global coordinates, the instance is only included here for clarity
+    public ReferenceFrame earthFrame = new ReferenceFrame();
+
+    // Object is the frame of reference defined by the GameObject's Transform component in Unity
+    // it has no notion of span, chord or thickness and the rotation of the frame is effectively arbitrary
+    // We need to keep track of this however as the dynamic motion of the object will generally
+    // rotate the frame
+    public ReferenceFrame unityObjectFrame = new ReferenceFrame();
+
+    // AeroBodyFrame is the rotation of the object frame such that (x, y, z) align with (span, thickness, chord)
+    public ReferenceFrame aeroBodyFrame = new ReferenceFrame();
+
+    // Equivalent Aerodynamic Body is the rotation and projection of the AeroBody frame and dimensions
+    // into the wind direction so that no sideslip is present
+    public ReferenceFrame equivAerobodyFrame = new ReferenceFrame();
+
+    #endregion Reference Frames
+
+    #region Aerodynamic Bodies
     //  -------------------------------------------------------------------------------------------
     //      Aerodynamic Bodies
     //  -------------------------------------------------------------------------------------------
@@ -182,24 +210,26 @@ public class AeroBody : MonoBehaviour
         }
     }
 
-    // Earth is just Unity's global coordinates, the instance is only included here for clarity
-    public ReferenceFrame earthFrame = new ReferenceFrame();
-
-    // Object is the frame of reference defined by the GameObject's Transform component in Unity
-    // it has no notion of span, chord or thickness and the rotation of the frame is effectively arbitrary
-    // We need to keep track of this however as the dynamic motion of the object will generally
-    // rotate the frame
-    public ReferenceFrame unityObjectFrame = new ReferenceFrame();
-
-    // AeroBodyFrame is the rotation of the object frame such that (x, y, z) align with (span, thickness, chord)
-    public ReferenceFrame aeroBodyFrame = new ReferenceFrame();
     public AerodynamicBody aeroBody = new AerodynamicBody();
-
-    // Equivalent Aerodynamic Body is the rotation and projection of the AeroBody frame and dimensions
-    // into the wind direction so that no sideslip is present
-    public ReferenceFrame equivAerobodyFrame = new ReferenceFrame();
     public AerodynamicBody EAB = new AerodynamicBody();
 
+    #endregion Aerodynamic Bodies
+
+    #region General Properties
+    //  -------------------------------------------------------------------------------------------
+    //      Unity Related Components
+    //  -------------------------------------------------------------------------------------------
+
+    // Unity's physics body, used to apply physics to the object - We're going to assume that all
+    // objects connected to a rigidbody are fixed and cannot move independently from the rigid body
+    // This means that WE CAN'T MODEL FLAPPING WINGS OR FLEXIBLE WINGS using this method
+    public Rigidbody rb;
+
+    // Flag to determine if the model needs to recalculate dimensions at runtime
+    public bool dynamicallyVariableShape;
+
+    // Check to show this component is up and running, not necessary here but leaving it in just in case
+    public bool initialised = false;
 
     //  -------------------------------------------------------------------------------------------
     //      General Aerodynamic Body Properties
@@ -247,6 +277,10 @@ public class AeroBody : MonoBehaviour
     // Resultant forces and moments to be applied to the rigid body component
     public Vector3 resultantAerodynamicForce_earthFrame, resultantAerodynamicForce_bodyFrame;                                   // (N)
     public Vector3 resultantAerodynamicMoment_earthFrame, resultantAerodynamicMoment_bodyFrame;                                 // (Nm)
+
+    #endregion General Properties
+
+    #region Aerodynamic Functions
 
     //  -------------------------------------------------------------------------------------------
     //      Aerodynamic Functions
@@ -508,33 +542,21 @@ public class AeroBody : MonoBehaviour
 
     public void GetComponentForces_7()
     {
-        resultantAerodynamicForce_bodyFrame = Vector3.zero;
-        resultantAerodynamicMoment_bodyFrame = Vector3.zero;
-
-        for (int i = 0; i < aerodynamicComponents.Length; i++)
+        // Call the event, any components attached to this game object will be subscribed
+        if (runModelEvent != null)
         {
-            aerodynamicComponents[i].RunModel(this);
-            resultantAerodynamicForce_bodyFrame += aerodynamicComponents[i].resultantForce_bodyFrame;
-            resultantAerodynamicMoment_bodyFrame += aerodynamicComponents[i].resultantMoment_bodyFrame;
+            runModelEvent(this);
         }
-
-        resultantAerodynamicForce_earthFrame = TransformBodyToEarth(resultantAerodynamicForce_bodyFrame);
-        resultantAerodynamicMoment_earthFrame = TransformBodyToEarth(resultantAerodynamicMoment_bodyFrame);
     }
 
 
     public void ApplyAerodynamicForces_8()
     {
-        // Now that we're considering the aero body and rigid body separately,
-        // we need to apply forces at positions instead of directly to the rigid body
-
-        // This is what we used to do
-        //rb.AddForce(resultantAerodynamicForce_earthFrame);
-        //rb.AddTorque(resultantAerodynamicMoment_earthFrame);
-
-        // Again, we're using the transform's position here as the aero body position
-        rb.AddForceAtPosition(resultantAerodynamicForce_earthFrame, transform.position);
-        rb.AddTorque(resultantAerodynamicMoment_earthFrame);
+        // Call the event, any components attached to this game object will be subscribed
+        if (applyForcesEvent != null)
+        {
+            applyForcesEvent(rb);
+        }
     }
 
     public void GetEllipsoid_1_to_2()
@@ -574,10 +596,7 @@ public class AeroBody : MonoBehaviour
         GetEquivalentAerodynamicBody_6();
     }
 
-    public void GetAeroComponents()
-    {
-        aerodynamicComponents = GetComponents<AerodynamicComponent>();
-    }
+    #endregion Aerodynamic Functions
 
     public void Initialise()
     {
@@ -598,6 +617,8 @@ public class AeroBody : MonoBehaviour
                     // Add a rigid body if we can't find one anywhere
                     Debug.LogWarning("No RigidBody Component found for " + gameObject.name + ", adding one.");
                     rb = gameObject.AddComponent<Rigidbody>();
+
+                    // Don't use Unity's filthy drag model - bah!
                     rb.angularDrag = 0;
                     rb.drag = 0;
                 }
@@ -605,7 +626,6 @@ public class AeroBody : MonoBehaviour
         }
 
         GetEllipsoid_1_to_2();
-        GetAeroComponents();
         initialised = true;
     }
 
@@ -624,5 +644,43 @@ public class AeroBody : MonoBehaviour
         GetComponentForces_7();
         ApplyAerodynamicForces_8();
 
+    }
+
+    private void OnValidate()
+    {
+        // Update the ellipsoid properties if anything is changed in the inspector
+        GetReferenceFrames_1();
+    }
+
+    // This could be offloaded to a separate class with a singleton so we don't have to store it in
+    // memory for every aero body component
+    Mesh gizmoMesh;
+    private void OnDrawGizmos()
+    {
+        // This is a very hacky way to draw a squashed sphere mesh as an ellipsoid
+        // I keep getting errors when the project opens because it tries to destroy things and yeah...
+        // Would be nice to be able to reference just the mesh as a resource instead of the game object
+        if (!gizmoMesh)
+        {
+            gizmoMesh = Resources.Load<Mesh>("Sphere");
+            //GameObject go = Resources.Load("Sphere") as GameObject;
+            //gizmoMesh = go.GetComponent<MeshFilter>().sharedMesh;
+            //DestroyImmediate(go);
+        }
+
+        // This is a lazy way to update the aerobody in the editor when the transform component is changed
+        // We need to do this because the scale of the transform is used to determine the ellipsoid properties
+        // I think we should allow people to adjust this but there are so many ways to derive the body that it
+        // will take a while to enable them all or decide which ones are best
+        if (transform.hasChanged)
+        {
+            GetReferenceFrames_1();
+            transform.hasChanged = false;
+        }
+        
+        // Draw the ellipsoid with the same rotation as the aero body, need to do this because
+        // the transform won't necessarily be the same rotation as the span, thickness, chord axes
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireMesh(gizmoMesh, transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
     }
 }

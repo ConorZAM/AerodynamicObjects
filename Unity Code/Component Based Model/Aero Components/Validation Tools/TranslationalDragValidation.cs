@@ -44,7 +44,7 @@ public class TranslationalDragValidation : ValidationTool
             wind.x = 0; // Just in case...
 
             // This accounts for the body not having conventional span, thickness, chord as x, y, z
-            wind = aeroBody.TransformBodyToEarth(wind);
+            wind = aeroBody.TransformDirectionBodyToEarth(wind);
 
             // Just going to do everything for now to be thorough - this should also catch
             // any errors hiding!

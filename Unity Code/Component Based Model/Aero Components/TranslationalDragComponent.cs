@@ -38,5 +38,8 @@ public class TranslationalDragComponent : AerodynamicComponent
 
         resultantForce_bodyFrame = -CD * aeroBody.dynamicPressure * aeroBody.profileArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
         resultantMoment_bodyFrame = Vector3.zero;
+
+        resultantForce_earthFrame = aeroBody.TransformDirectionBodyToEarth(resultantForce_bodyFrame);
+        forcePointOfAction_earthFrame = aeroBody.transform.position;
     }
 }

@@ -33,6 +33,7 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
     public Vector3 lift_bodyFrame;              // (Nm)
     public Vector3 inducedDrag_bodyFrame;       // (Nm)
+    public Vector3 centreOfPressure_earth;      // (m)
 
     public override void RunModel(AeroBody aeroBody)
     {
@@ -90,9 +91,14 @@ public class ThinAerofoilComponent : AerodynamicComponent
         inducedDrag_bodyFrame = -CD_induced * aeroBody.dynamicPressure * aeroBody.profileArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
         resultantForce_bodyFrame = lift_bodyFrame + inducedDrag_bodyFrame;
 
+        // New addition here...
+        forcePointOfAction_earthFrame = aeroBody.transform.position + aeroBody.TransformDirectionEABToEarth(new Vector3(0, 0, CoP_z));
+        resultantForce_earthFrame = aeroBody.TransformDirectionBodyToEarth(resultantForce_bodyFrame);
+
+        // We won't need to compute the moments anymore - just leaving it in for now so nothing else breaks!
+
         // The minus sign here is dirty but I can't figure out why the pitching moment is always in the wrong direction?!
         resultantMoment_bodyFrame = new Vector3(-CM * qS * aeroBody.EAB.chord_c, 0, 0);
-        resultantMoment_bodyFrame = aeroBody.TransformEABToBody(resultantMoment_bodyFrame);
+        resultantMoment_bodyFrame = aeroBody.TransformDirectionEABToBody(resultantMoment_bodyFrame);
     }
-
 }
