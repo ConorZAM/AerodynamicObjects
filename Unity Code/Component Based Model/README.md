@@ -1,3 +1,18 @@
+# AeroBody
+The AeroBody class is the main class for this implementation. It is responsible for
+- Coordinate transformations
+- Resolution of the wind velocity
+- (ToDo) Tracking velocity of the body when a rigid body is not provided
+
+The AeroBody maintains:
+- Dimensions of the object
+- Reference frames: Earth, Object, AeroBody, Equivalent AeroBody
+- Resolved dimensions of the equivalent aerodynamic body
+
+Aerodynamics Components are added to the same GameObject as an AeroBody, the Aerodynamics Components are responsible for the computation and application of aerodynamic forces.
+
+For testing purposes all variables and functions are made public. This allows for easy probing of the aerodynamic model during testing and validation.
+
 # Component-Based Aerodynamic Objects
 Aerodynamic objects uses separate components for each part of the aerodynamics model. Some applications will not require full fidelity aerodynamics and so it would be efficient to only add the necessary components. Similarly, some components may not be suitable for the desired use if the user wants to implement their own dynamics.
 
