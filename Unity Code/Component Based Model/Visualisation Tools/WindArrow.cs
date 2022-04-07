@@ -11,13 +11,13 @@ public class WindArrow : ComponentArrows
 
     void Awake()
     {
+        pointAtPoint = true;
         aeroBody = GetComponent<AeroBody>();
-
         windArrow = new Arrow(ArrowSettings.Singleton().windColour, "Wind Arrow", transform);
     }
 
 
-    void FixedUpdate()
+    void Update()
     {
         SetArrowPositionAndRotationFromVector(windArrow, -aeroBody.earthFrame.windVelocity, aeroBody.transform.position);
     }

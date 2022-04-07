@@ -543,20 +543,14 @@ public class AeroBody : MonoBehaviour
     public void GetComponentForces_7()
     {
         // Call the event, any components attached to this game object will be subscribed
-        if (runModelEvent != null)
-        {
-            runModelEvent(this);
-        }
+        runModelEvent?.Invoke(this);
     }
 
 
     public void ApplyAerodynamicForces_8()
     {
         // Call the event, any components attached to this game object will be subscribed
-        if (applyForcesEvent != null)
-        {
-            applyForcesEvent(rb);
-        }
+        applyForcesEvent?.Invoke(rb);
     }
 
     public void GetEllipsoid_1_to_2()
@@ -646,12 +640,6 @@ public class AeroBody : MonoBehaviour
 
     }
 
-    private void OnValidate()
-    {
-        // Update the ellipsoid properties if anything is changed in the inspector
-        GetReferenceFrames_1();
-    }
-
     // This could be offloaded to a separate class with a singleton so we don't have to store it in
     // memory for every aero body component
     Mesh gizmoMesh;
@@ -672,7 +660,13 @@ public class AeroBody : MonoBehaviour
         // We need to do this because the scale of the transform is used to determine the ellipsoid properties
         // I think we should allow people to adjust this but there are so many ways to derive the body that it
         // will take a while to enable them all or decide which ones are best
-        if (transform.hasChanged)
+        if (!initialised)
+        {
+            GetReferenceFrames_1();
+            initialised = true;
+            transform.hasChanged = false;
+        }
+        if (!Application.isPlaying && transform.hasChanged)
         {
             GetReferenceFrames_1();
             transform.hasChanged = false;
@@ -683,4 +677,6 @@ public class AeroBody : MonoBehaviour
         Gizmos.color = Color.green;
         Gizmos.DrawWireMesh(gizmoMesh, transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
     }
+
+    bool intialised = false;
 }

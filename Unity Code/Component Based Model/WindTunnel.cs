@@ -4,9 +4,11 @@ using UnityEngine;
 
 public class WindTunnel : MonoBehaviour
 {
-    Aerodynamics aeroObject;
     Rigidbody rb;
     ConfigurableJoint joint;
+    
+    [Header("Properties")]
+    public float planformArea = 1f;
 
     [Space(10)]
     [Header("Forces")]
@@ -39,7 +41,6 @@ public class WindTunnel : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        aeroObject = GetComponent<Aerodynamics>();
         rb = GetComponent<Rigidbody>();
 
         ResetJoint();
@@ -53,8 +54,6 @@ public class WindTunnel : MonoBehaviour
     {
         SetJoint();
         rb.angularVelocity = angularVelocity;
-        aeroObject.rho = rho;
-        aeroObject.externalFlowVelocity_inEarthFrame = earthWind;
 
         CalculateForcesAndCoefficients();
     }
@@ -116,7 +115,7 @@ public class WindTunnel : MonoBehaviour
         drag = horizontalForce.magnitude;
 
         float q = 0.5f * rho * earthWind.sqrMagnitude;
-        float S = aeroObject.planformArea;
+        float S = planformArea;
 
         CL = lift / (q * S);
         CD = drag / (q * S);
@@ -127,9 +126,9 @@ public class WindTunnel : MonoBehaviour
         // Priorities go:
         // If we have some angular velocity set, then body can rotate
         // if we have no angular velocity set, then leave the rotate as it was
-        canRotateX = angularVelocity.x != 0f ? true : canRotateX;
-        canRotateY = angularVelocity.y != 0f ? true : canRotateY;
-        canRotateZ = angularVelocity.z != 0f ? true : canRotateZ;
+        canRotateX = angularVelocity.x != 0f || canRotateX;
+        canRotateY = angularVelocity.y != 0f || canRotateY;
+        canRotateZ = angularVelocity.z != 0f || canRotateZ;
     }
 
     void SetJoint()
