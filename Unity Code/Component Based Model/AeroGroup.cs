@@ -13,7 +13,7 @@ public class AeroGroup : MonoBehaviour
     public float aspectRatio;
     public float bodyTotalArea;
 
-    float areaScale;
+    public float areaScale;
 
     private void OnValidate()
     {
