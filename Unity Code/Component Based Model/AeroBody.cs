@@ -246,12 +246,12 @@ public class AeroBody : MonoBehaviour
 
     // The projection from body to eab assumes constant areas for the ellipsoid body
     // therefore planform and profile areas are the same in each frame
-    float _planformArea;
+    public float bodyPlanformArea;
     public float planformArea       // (m^2)
     {
         get
         {
-            if (myGroup == null) { return _planformArea; } else { return myGroup.areaScale * _planformArea; }
+            if (myGroup == null) { return bodyPlanformArea; } else { return myGroup.areaScale * bodyPlanformArea; }
         }
     }
     public float profileArea;         // (m^2)
@@ -416,7 +416,7 @@ public class AeroBody : MonoBehaviour
         volumeVector.z = fourPiOver3 * aeroBody.midAxis * aeroBody.majorAxis * aeroBody.majorAxis;
 
         // Planform area - area of the aerodynamic body in the lifting plane
-        _planformArea = areaVector.y;
+        bodyPlanformArea = areaVector.y;
 
         // Approximate surface area of ellipsoid
         ellipsoidSurfaceArea = 4f * Mathf.PI * Mathf.Pow((1f / 3f) * (Mathf.Pow(aeroBody.majorAxis * aeroBody.minorAxis, 1.6f)

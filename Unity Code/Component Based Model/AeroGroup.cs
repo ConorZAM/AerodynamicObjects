@@ -28,7 +28,7 @@ public class AeroGroup : MonoBehaviour
         // Get total areas for individual bodies
         for (int i = 0; i < aeroBodies.Length; i++)
         {
-            bodyTotalArea += aeroBodies[i].planformArea;
+            bodyTotalArea += aeroBodies[i].bodyPlanformArea;
         }
 
         areaScale = planformArea / bodyTotalArea;
@@ -37,7 +37,7 @@ public class AeroGroup : MonoBehaviour
         scaledArea = 0f;
         for (int i = 0; i < aeroBodies.Length; i++)
         {
-            scaledArea += areaScale * aeroBodies[i].planformArea;
+            scaledArea += areaScale * aeroBodies[i].bodyPlanformArea;
         }
     }
 
