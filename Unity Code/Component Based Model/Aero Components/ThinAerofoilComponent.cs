@@ -37,10 +37,13 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
     public override void RunModel(AeroBody aeroBody)
     {
+        // THIS IS AN AWFUL FIX BUT IT WILL DO FOR NOW
+        float aspectRatio = (aeroBody.myGroup == null) ? aeroBody.EAB.aspectRatio : aeroBody.myGroup.aspectRatio;
+
         // Prandtyl Theory
         // Clamp lower value to min AR of 2. Otherwise lift curve slope gets lower than sin 2 alpha which is non physical
         // Check for the divide by zero, although I think a zero AR means bigger problems anyway
-        aspectRatioCorrection_kAR = aeroBody.EAB.aspectRatio == 0f ? 0f : Mathf.Clamp(aeroBody.EAB.aspectRatio / (2f + aeroBody.EAB.aspectRatio), 0f, 1f);
+        aspectRatioCorrection_kAR = (aspectRatio == 0f) ? 0f : Mathf.Clamp(aspectRatio / (2f + aspectRatio), 0f, 1f);
 
         // This value needs checking for thickness to chord ratio of 1
 
@@ -49,7 +52,7 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
         // Emperical relation to allow for viscous effects
         // This could do with being in radians!
-        stallAngle = stallAngleMin + (stallAngleMax - stallAngleMin) * Mathf.Exp(-aeroBody.EAB.aspectRatio / 2f);
+        stallAngle = stallAngleMin + (stallAngleMax - stallAngleMin) * Mathf.Exp(-aspectRatio / 2f);
 
         // Lifting line theory
         liftCurveSlope = 2f * Mathf.PI * aspectRatioCorrection_kAR * thicknessCorrection_kt;
@@ -70,7 +73,7 @@ public class ThinAerofoilComponent : AerodynamicComponent
         CL = preStallFilter * CL_preStall + (1 - preStallFilter) * CL_postStall;
 
         // Induced drag
-        CD_induced = (1f / (Mathf.PI * aeroBody.EAB.aspectRatio)) * CL * CL;
+        CD_induced = (1f / (Mathf.PI * aspectRatio)) * CL * CL;
 
         // Pitching moment at mid chord due to camber only active pre stall
         CM_0 = 0.25f * -liftCurveSlope * alpha_0 * preStallFilter;

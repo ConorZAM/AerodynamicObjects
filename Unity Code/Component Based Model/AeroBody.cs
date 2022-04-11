@@ -251,6 +251,8 @@ public class AeroBody : MonoBehaviour
     {
         get
         {
+            // This is used to scale up or down the planform area of bodies within a group so that
+            // their total area equals the required planform area of the group
             if (myGroup == null) { return bodyPlanformArea; } else { return myGroup.areaScale * bodyPlanformArea; }
         }
     }
