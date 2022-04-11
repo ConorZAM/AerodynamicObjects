@@ -26,6 +26,10 @@ public class AeroBody : MonoBehaviour
     public Vector3 earthVelocity;
 
 
+    // Quick and dirty fix for grouping
+    public AeroGroup myGroup = null;
+
+
     #region Component Computation and Apply Force Events
 
     /* The AeroBody has two events:
@@ -85,10 +89,10 @@ public class AeroBody : MonoBehaviour
         public Vector3 angularWindVelocity_normalised;  // (unit vector)
 
         // The rotation from the previous frame of reference to this frame of reference
-        public Quaternion objectToFrameRotation;
+        public Quaternion objectToFrameRotation = Quaternion.identity;
 
         // The rotation from the current frame of reference back to the previous frame
-        public Quaternion inverseObjectToFrameRotation;
+        public Quaternion inverseObjectToFrameRotation = Quaternion.identity;
 
         public void SetDirectionVectors(Vector3 x, Vector3 y, Vector3 z)
         {
@@ -660,12 +664,6 @@ public class AeroBody : MonoBehaviour
         // We need to do this because the scale of the transform is used to determine the ellipsoid properties
         // I think we should allow people to adjust this but there are so many ways to derive the body that it
         // will take a while to enable them all or decide which ones are best
-        if (!initialised)
-        {
-            GetReferenceFrames_1();
-            initialised = true;
-            transform.hasChanged = false;
-        }
         if (!Application.isPlaying && transform.hasChanged)
         {
             GetReferenceFrames_1();
@@ -678,5 +676,8 @@ public class AeroBody : MonoBehaviour
         Gizmos.DrawWireMesh(gizmoMesh, transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
     }
 
-    bool intialised = false;
+    private void Reset()
+    {
+        GetReferenceFrames_1();
+    }
 }

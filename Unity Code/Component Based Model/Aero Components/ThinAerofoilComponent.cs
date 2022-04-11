@@ -86,9 +86,9 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
         // Convert coefficients to forces and moments
         float qS = aeroBody.dynamicPressure * aeroBody.planformArea;
-        Vector3 liftDirection = Vector3.Cross(aeroBody.aeroBodyFrame.windVelocity_normalised, aeroBody.angleOfAttackRotationVector);
+        Vector3 liftDirection = Vector3.Cross(aeroBody.aeroBodyFrame.windVelocity_normalised, aeroBody.angleOfAttackRotationVector).normalized;
         lift_bodyFrame = qS * CL * liftDirection;
-        inducedDrag_bodyFrame = -CD_induced * aeroBody.dynamicPressure * aeroBody.profileArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
+        inducedDrag_bodyFrame = -CD_induced * qS * aeroBody.aeroBodyFrame.windVelocity_normalised;
         resultantForce_bodyFrame = lift_bodyFrame + inducedDrag_bodyFrame;
 
         // New addition here...
