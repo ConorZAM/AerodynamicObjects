@@ -19,6 +19,7 @@ public class WindArrow : ComponentArrows
 
     void Update()
     {
+        aeroBody.ResolveWindAndDimensions_1_to_6();
         SetArrowPositionAndRotationFromVector(windArrow, -aeroBody.earthFrame.windVelocity, aeroBody.transform.position);
     }
 }

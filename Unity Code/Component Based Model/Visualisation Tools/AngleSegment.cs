@@ -124,6 +124,8 @@ public class AngleSegment : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // Get the current state of the aerobody - don't worry this is overwritten again in fixedupdate
+        aeroBody.ResolveWindAndDimensions_1_to_6();
         SetWedgeAngle(aeroBody.alpha);
         SetWedgeLocalRotation(Quaternion.Euler(new Vector3(0, aeroBody.beta_deg)));
     }

@@ -29,14 +29,15 @@ public class ThinAerofoilArrows : ComponentArrows
 
     void Update()
     {
-        // Lift and induced drag act at the centre of pressure location
-        Vector3 centreOfPressure_earthFrame = aeroBody.transform.position + aeroBody.TransformDirectionEABToEarth(new Vector3(0, 0, component.CoP_z));
-        
-        // Get the lift and induced drag force vectors in earth frame
+        // Taking the computational hit to get the up to date values
+        aeroBody.ResolveWindAndDimensions_1_to_6();
+        component.RunModel(aeroBody);
+
+        // Get the separate lift and induced drag force vectors in earth frame
         Vector3 lift_earthFrame = aeroBody.TransformDirectionBodyToEarth(component.lift_bodyFrame);
         Vector3 inducedDrag_earthFrame = aeroBody.TransformDirectionBodyToEarth(component.inducedDrag_bodyFrame);
 
-        SetArrowPositionAndRotationFromVector(LiftArrow, lift_earthFrame, centreOfPressure_earthFrame);
-        SetArrowPositionAndRotationFromVector(InducedDragArrow, inducedDrag_earthFrame, centreOfPressure_earthFrame);
+        SetArrowPositionAndRotationFromVector(LiftArrow, lift_earthFrame, component.forcePointOfAction_earthFrame);
+        SetArrowPositionAndRotationFromVector(InducedDragArrow, inducedDrag_earthFrame, component.forcePointOfAction_earthFrame);
     }
 }
