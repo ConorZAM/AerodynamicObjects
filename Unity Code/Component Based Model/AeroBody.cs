@@ -665,6 +665,7 @@ public class AeroBody : MonoBehaviour
         if (!gizmoMesh)
         {
             gizmoMesh = Resources.Load<Mesh>("Sphere");
+            GetReferenceFrames_1();
             //GameObject go = Resources.Load("Sphere") as GameObject;
             //gizmoMesh = go.GetComponent<MeshFilter>().sharedMesh;
             //DestroyImmediate(go);

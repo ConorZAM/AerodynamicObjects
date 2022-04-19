@@ -13,6 +13,9 @@ public class TranslationalDragComponent : AerodynamicComponent
     public float CD_roughSphere = 0.5f;                 // (dimensionless)
     public float reynoldsNum_linear, Cf_linear;         // (dimensionless)
 
+    // Debugging
+    public float eab_thickness, eab_chord, eab_span;
+
     public override void RunModel(AeroBody aeroBody)
     {
         // Linear - only care about the direction of flow, not resolving into axes
@@ -36,10 +39,11 @@ public class TranslationalDragComponent : AerodynamicComponent
         CD_profile = CD_shear_0aoa + aeroBody.EAB.thicknessToChordRatio_bOverc * CD_pressure_0aoa + (CD_shear_90aoa + CD_pressure_90aoa - CD_shear_0aoa - aeroBody.EAB.thicknessToChordRatio_bOverc * CD_pressure_0aoa) * aeroBody.sinAlpha * aeroBody.sinAlpha;
         CD = CD_profile;
 
-        resultantForce_bodyFrame = -CD * aeroBody.dynamicPressure * aeroBody.profileArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
+        resultantForce_bodyFrame = -CD * aeroBody.dynamicPressure * aeroBody.planformArea * aeroBody.aeroBodyFrame.windVelocity_normalised;
         resultantMoment_bodyFrame = Vector3.zero;
 
         resultantForce_earthFrame = aeroBody.TransformDirectionBodyToEarth(resultantForce_bodyFrame);
+        // Drag is applied at the geometric centre of the aerodynamic body
         forcePointOfAction_earthFrame = aeroBody.transform.position;
     }
 }

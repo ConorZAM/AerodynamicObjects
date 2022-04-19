@@ -75,6 +75,13 @@ public class WindTunnel : MonoBehaviour
         SetJoint();
     }
 
+    public void SetRotation(Vector3 _rotation)
+    {
+        rotation = _rotation;
+
+        SetRotation();
+    }
+
     void ResetJoint()
     {
         RemoveJoint();

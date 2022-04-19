@@ -16,6 +16,11 @@ public class WindArrow : ComponentArrows
         windArrow = new Arrow(ArrowSettings.Singleton().windColour, "Wind Arrow", transform);
     }
 
+    private void Reset()
+    {
+        pointAtPoint = true;
+    }
+
 
     void Update()
     {

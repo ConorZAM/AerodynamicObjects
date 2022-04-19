@@ -7,7 +7,7 @@ class ArrowSettings : ScriptableObject
 {
     // Using a horrible serialisation method here so that we can have our settings
     // appear in the project settings window. It is ugly as hell.
-    public const string k_ArrowSettingsPath = "Assets/Editor/ArrowSettings.asset";
+    public const string k_ArrowSettingsPath = "Assets/ArrowSettings.asset";
 
     static ArrowSettings singleton;
     public static ArrowSettings Singleton()
@@ -18,6 +18,13 @@ class ArrowSettings : ScriptableObject
         return singleton;
     }
 
+    // New values
+    [SerializeField, Tooltip("The overall size of the arrow")]
+    public float scale = 1f;
+    [SerializeField, Tooltip("Multiplier of the arrow's total length based on the value it represents. Length (m) = sensitivty * value")]
+    public float sensitivity = 1f;
+
+    // Old values
     [SerializeField]
     public float arrowAspectRatio = 0.05f;
     [SerializeField]
@@ -44,7 +51,11 @@ class ArrowSettings : ScriptableObject
         {
             settings = ScriptableObject.CreateInstance<ArrowSettings>();
 
-            // Default values
+            // Default new values
+            settings.scale = 1f;
+            settings.sensitivity = 1f;
+
+            // Default old values
             settings.arrowAspectRatio = 0.05f;
             settings.arrowHeadFractionOfTotalLength = 0.2f;
             settings.arrowAlpha = 0.5f;
@@ -89,6 +100,12 @@ static class MyCustomSettingsIMGUIRegister
             {
                 var settings = ArrowSettings.GetSerializedSettings();
 
+                // New values
+                EditorGUILayout.PropertyField(settings.FindProperty("scale"), new GUIContent("Scale"));
+                EditorGUILayout.PropertyField(settings.FindProperty("sensitivity"), new GUIContent("Sensitivity"));
+
+
+                // Old values
                 EditorGUILayout.PropertyField(settings.FindProperty("arrowAspectRatio"), new GUIContent("Aspect Ratio"));
                 EditorGUILayout.PropertyField(settings.FindProperty("arrowHeadFractionOfTotalLength"), new GUIContent("Head length as a fraction of total length"));
                 //EditorGUILayout.PropertyField(settings.FindProperty("arrowAlpha"), new GUIContent("Alpha"));

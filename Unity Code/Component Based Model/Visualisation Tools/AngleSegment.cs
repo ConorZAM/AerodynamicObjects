@@ -24,6 +24,7 @@ public class AngleSegment : MonoBehaviour
         GameObject angleOfAttackWedge = new GameObject("Angle of Attack Wedge");
         angleOfAttackWedge.transform.parent = transform;
         rootTransform = angleOfAttackWedge.transform;
+        rootTransform.localPosition = Vector3.zero;
         rootTransform.localRotation = Quaternion.identity;
         rootTransform.localScale = new Vector3(1f / rootTransform.parent.localScale.x, 1f / rootTransform.parent.localScale.y, 1f / rootTransform.parent.localScale.z);
 

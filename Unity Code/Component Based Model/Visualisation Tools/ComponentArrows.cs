@@ -13,14 +13,14 @@ public class ComponentArrows : MonoBehaviour
     // and I can't be bothered just passing those values in every time, maybe the functions for arrows
     // should be out here too and the Arrow class can just be a data structure.
 
-    [Tooltip("The overall size of the arrow")]
-    public float scale = 1f;
     [Tooltip("Distance between the arrow head and the point of action")]
     public float offset = 0f;
-    [Tooltip("Multiplier of the arrow's total length based on the value it represents. Length (m) = sensitivty * value")]
-    public float sensitivity = 1f;
     [Tooltip("Does the arrow point towards the point of action or away from it")]
     public bool pointAtPoint;
+
+    public float scale { get { return ArrowSettings.Singleton().scale; } }
+    public float sensitivity { get { return ArrowSettings.Singleton().sensitivity; } }
+    public float arrowHeadFractionOfTotalLength { get { return ArrowSettings.Singleton().arrowHeadFractionOfTotalLength; } }
 
     public void SetArrowPositionAndRotation(Arrow arrow, float length, Vector3 rootPosition, Vector3 direction)
     {
@@ -39,12 +39,12 @@ public class ComponentArrows : MonoBehaviour
         arrow.body.up = direction;
 
         // This might become a fixed value rather than scaling the head proportionally like this
-        arrow.body.localScale = new Vector3(scale, (1f - ArrowSettings.Singleton().arrowHeadFractionOfTotalLength) * length, scale);
+        arrow.body.localScale = new Vector3(scale, (1f - arrowHeadFractionOfTotalLength) * length, scale);
 
-        arrow.head.position = arrow.body.position + direction * ((1f - ArrowSettings.Singleton().arrowHeadFractionOfTotalLength) * length);
+        arrow.head.position = arrow.body.position + direction * ((1f - arrowHeadFractionOfTotalLength) * length);
         arrow.head.up = direction;
         // This might become a fixed value rather than scaling the head proportionally like this
-        arrow.head.localScale = new Vector3(2 * scale, ArrowSettings.Singleton().arrowHeadFractionOfTotalLength * length, 2 * scale);
+        arrow.head.localScale = new Vector3(2 * scale, arrowHeadFractionOfTotalLength * length, 2 * scale);
 
     }
 
@@ -66,12 +66,12 @@ public class ComponentArrows : MonoBehaviour
         arrow.body.up = direction;
 
         // This might become a fixed value rather than scaling the head proportionally like this
-        arrow.body.localScale = new Vector3(scale, (1f - ArrowSettings.Singleton().arrowHeadFractionOfTotalLength) * length, scale);
+        arrow.body.localScale = new Vector3(scale, (1f - arrowHeadFractionOfTotalLength) * length, scale);
 
-        arrow.head.position = arrow.body.position + direction * ((1f - ArrowSettings.Singleton().arrowHeadFractionOfTotalLength) * length);
+        arrow.head.position = arrow.body.position + direction * ((1f - arrowHeadFractionOfTotalLength) * length);
         arrow.head.up = direction;
         // This might become a fixed value rather than scaling the head proportionally like this
-        arrow.head.localScale = new Vector3(2 * scale, ArrowSettings.Singleton().arrowHeadFractionOfTotalLength * length, 2 * scale);
+        arrow.head.localScale = new Vector3(2 * scale, arrowHeadFractionOfTotalLength * length, 2 * scale);
     }
 
 
