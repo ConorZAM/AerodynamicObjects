@@ -241,8 +241,13 @@ public class AeroBody : MonoBehaviour
     //      These are properties which are not changed by the projection
     //      from AeroBody to EAB and so are kept outside of the classes
 
-
-    public float camber;                            // (m)
+    public float Camber; // (m)
+    public void SetCamber(float _camber)
+    {
+        Camber = _camber;
+        aeroBody.SetAerodynamicRatios(_camber);
+        EAB.SetAerodynamicRatios(_camber);
+    }
 
     // The projection from body to eab assumes constant areas for the ellipsoid body
     // therefore planform and profile areas are the same in each frame
@@ -403,7 +408,7 @@ public class AeroBody : MonoBehaviour
         aeroBodyFrame.SetFrameRotation(Quaternion.LookRotation(aeroBodyFrame.zDirection, aeroBodyFrame.yDirection));
 
         // Set the aerodynamic related properties
-        aeroBody.SetAerodynamicRatios(camber);
+        aeroBody.SetAerodynamicRatios(Camber);
     }
 
     public void GetEllipsoidProperties_2()
@@ -538,7 +543,7 @@ public class AeroBody : MonoBehaviour
         EAB.chord_c = 2f * EAB.midAxis;
 
         // Work out aero parameters of equivalent body
-        EAB.SetAerodynamicRatios(camber);
+        EAB.SetAerodynamicRatios(Camber);
 
         // Profile area is the projection in the wind direction
         profileArea = Vector3.Scale(areaVector, aeroBodyFrame.windVelocity_normalised).magnitude;

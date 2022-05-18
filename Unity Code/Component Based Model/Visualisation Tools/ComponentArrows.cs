@@ -22,6 +22,8 @@ public class ComponentArrows : MonoBehaviour
     public float sensitivity { get { return ArrowSettings.Singleton().sensitivity; } }
     public float arrowHeadFractionOfTotalLength { get { return ArrowSettings.Singleton().arrowHeadFractionOfTotalLength; } }
 
+    
+
     public void SetArrowPositionAndRotation(Arrow arrow, float length, Vector3 rootPosition, Vector3 direction)
     {
         // Direction MUST BE NORMALISED
@@ -86,8 +88,18 @@ public class ComponentArrows : MonoBehaviour
         {
             GameObject bodyGO = Resources.Load("Arrow Body") as GameObject;
             GameObject headGO = Resources.Load("Arrow Head") as GameObject;
+
+            int layerID = LayerMask.NameToLayer("Arrows");
+            if(layerID == -1)
+            {
+                Debug.LogError("No layer for Arrows was found. Please add a new layer named: Arrows");
+            }
+
             body = Instantiate(bodyGO).transform;
             head = Instantiate(headGO).transform;
+
+            SetLayerRecursively(body.gameObject, layerID);
+            SetLayerRecursively(head.gameObject, layerID);
 
             // Set colour and shader to fade
             body.GetChild(0).GetComponent<MeshRenderer>().materials[0].color = color;
@@ -122,6 +134,23 @@ public class ComponentArrows : MonoBehaviour
             body.SetParent(arrowT);
             head.SetParent(arrowT);
 
+            int layerID = LayerMask.NameToLayer("Arrows");
+            if (layerID == -1)
+            {
+                Debug.LogError("No layer for Arrows was found. Please add a new layer named: Arrows");
+            }
+
+             SetLayerRecursively(arrow, layerID);
+        }
+
+        void SetLayerRecursively(GameObject obj, int layer)
+        {
+            obj.layer = layer;
+
+            foreach (Transform child in obj.transform)
+            {
+                SetLayerRecursively(child.gameObject, layer);
+            }
         }
     }
 }

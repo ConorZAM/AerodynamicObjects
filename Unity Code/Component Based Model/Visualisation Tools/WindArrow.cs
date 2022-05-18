@@ -11,9 +11,21 @@ public class WindArrow : ComponentArrows
 
     void Awake()
     {
-        pointAtPoint = true;
-        aeroBody = GetComponent<AeroBody>();
-        windArrow = new Arrow(ArrowSettings.Singleton().windColour, "Wind Arrow", transform);
+        if (this.enabled)
+        {
+            pointAtPoint = true;
+            aeroBody = GetComponent<AeroBody>();
+            windArrow = new Arrow(ArrowSettings.Singleton().windColour, "Wind Arrow", transform);
+        }
+    }
+
+    private void OnDisable()
+    {
+        if(windArrow != null)
+        {
+            Destroy(windArrow.head.gameObject);
+            Destroy(windArrow.body.gameObject);
+        }
     }
 
     private void Reset()

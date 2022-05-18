@@ -14,10 +14,22 @@ public class TranslationalDragArrows : ComponentArrows
 
     void Awake()
     {
-        component = GetComponent<TranslationalDragComponent>();
-        aeroBody = GetComponent<AeroBody>();
+        if (this.enabled)
+        {
+            component = GetComponent<TranslationalDragComponent>();
+            aeroBody = GetComponent<AeroBody>();
 
-        DragArrow = new Arrow(ArrowSettings.Singleton().dragColour, "Drag Arrow", transform);
+            DragArrow = new Arrow(ArrowSettings.Singleton().dragColour, "Drag Arrow", transform);
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (DragArrow != null)
+        {
+            Destroy(DragArrow.head.gameObject);
+            Destroy(DragArrow.body.gameObject);
+        }
     }
 
 
