@@ -13,9 +13,6 @@ public class TranslationalDragComponent : AerodynamicComponent
     public float CD_roughSphere = 0.5f;                 // (dimensionless)
     public float reynoldsNum_linear, Cf_linear;         // (dimensionless)
 
-    // Debugging
-    public float eab_thickness, eab_chord, eab_span;
-
     public override void RunModel(AeroBody aeroBody)
     {
         // Linear - only care about the direction of flow, not resolving into axes
