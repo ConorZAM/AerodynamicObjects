@@ -661,7 +661,8 @@ public class AeroBody : MonoBehaviour
 
     // This could be offloaded to a separate class with a singleton so we don't have to store it in
     // memory for every aero body component
-    Mesh gizmoMesh;
+    public static Mesh gizmoMesh;
+
     private void OnDrawGizmos()
     {
         // This is a very hacky way to draw a squashed sphere mesh as an ellipsoid
@@ -688,8 +689,20 @@ public class AeroBody : MonoBehaviour
         
         // Draw the ellipsoid with the same rotation as the aero body, need to do this because
         // the transform won't necessarily be the same rotation as the span, thickness, chord axes
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireMesh(gizmoMesh, transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
+        Gizmos.color = Color.blue;
+
+        if (myGroup == null)
+        {
+            // Draw the usual ellipsoid wire mesh if the aerodynamic object is not part of a group
+            Gizmos.DrawWireMesh(gizmoMesh, transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
+        }
+        else
+        {
+            // If the object is part of a group then it is scaled to be a cuboid shape and so we draw that instead
+            Gizmos.matrix = Matrix4x4.TRS(transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
+            Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
+        }
+
     }
 
     private void Reset()
