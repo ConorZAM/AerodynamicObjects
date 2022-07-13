@@ -25,6 +25,9 @@ public class AeroBody : MonoBehaviour
     public Vector3 EAB_windVel;
     public Vector3 earthVelocity;
 
+    // The fluid flow velocity which is not due to the object's velocity
+    public Vector3 externalFlowVelocity_inEarthFrame;   // (m/s)
+
 
     // Quick and dirty fix for grouping
     public AeroGroup myGroup = null;
@@ -284,8 +287,7 @@ public class AeroBody : MonoBehaviour
     //      Fluid Properties and Characteristics
     //  -------------------------------------------------------------------------------------------
 
-    // The fluid flow velocity which is not due to the object's velocity
-    public Vector3 externalFlowVelocity_inEarthFrame;   // (m/s)
+    
 
     // Properties
     public float dynamicPressure;      // (Pa)

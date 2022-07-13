@@ -38,6 +38,7 @@ public class ThinAerofoilComponent : AerodynamicComponent
     public override void RunModel(AeroBody aeroBody)
     {
         // THIS IS AN AWFUL FIX BUT IT WILL DO FOR NOW
+        // Get the aspect ratio of the body, if it is part of a group/wing then use the AR of the group instead
         float aspectRatio = (aeroBody.myGroup == null) ? aeroBody.EAB.aspectRatio : aeroBody.myGroup.aspectRatio;
 
         // Prandtyl Theory
