@@ -37,6 +37,17 @@ public class WindArrow : ComponentArrows
     void Update()
     {
         aeroBody.ResolveWindAndDimensions_1_to_6();
-        SetArrowPositionAndRotationFromVector(windArrow, -aeroBody.earthFrame.windVelocity, aeroBody.transform.position);
+
+        if (useCoefficientForScale)
+        {
+            // Wind just uses normalised vector instead
+            SetArrowPositionAndRotationFromVector(windArrow, -aeroBody.earthFrame.windVelocity.normalized, aeroBody.transform.position);
+        }
+        else
+        {
+            SetArrowPositionAndRotationFromVector(windArrow, -aeroBody.earthFrame.windVelocity, aeroBody.transform.position);
+        }
+
+        
     }
 }

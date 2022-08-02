@@ -42,8 +42,23 @@ public class TotalDragArrows : ComponentArrows
         // Get the separate lift and induced drag force vectors in earth frame
         Vector3 inducedDrag_earthFrame = aeroBody.TransformDirectionBodyToEarth(inducedDragComponent.inducedDrag_bodyFrame);
 
-        // This isn't completely accurate as the induced drag acts at the centre of pressure while translational
-        // drag acts at the geometric centre in the AO model. But it's a happy medium for now.
-        SetArrowPositionAndRotationFromVector(DragArrow, translationalDragComponent.resultantForce_earthFrame + inducedDrag_earthFrame, translationalDragComponent.forcePointOfAction_earthFrame);
+        if (useCoefficientForScale)
+        {
+            // Calculate the overall drag coefficient
+            Vector3 dragForce = translationalDragComponent.resultantForce_earthFrame + inducedDrag_earthFrame;
+
+            // Pretty lazy way to get the coefficient in the same direction as the force
+            Vector3 CD = (Mathf.Abs(inducedDragComponent.CD_induced) + Mathf.Abs(translationalDragComponent.CD)) * dragForce.normalized;
+
+            // This isn't completely accurate as the induced drag acts at the centre of pressure while translational
+            // drag acts at the geometric centre in the AO model. But it's a happy medium for now.
+            SetArrowPositionAndRotationFromVector(DragArrow, CD, translationalDragComponent.forcePointOfAction_earthFrame);
+        }
+        else
+        {
+            // This isn't completely accurate as the induced drag acts at the centre of pressure while translational
+            // drag acts at the geometric centre in the AO model. But it's a happy medium for now.
+            SetArrowPositionAndRotationFromVector(DragArrow, translationalDragComponent.resultantForce_earthFrame + inducedDrag_earthFrame, translationalDragComponent.forcePointOfAction_earthFrame);
+        }
     }
 }

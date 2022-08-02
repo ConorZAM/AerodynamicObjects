@@ -39,7 +39,18 @@ public class TranslationalDragArrows : ComponentArrows
         aeroBody.ResolveWindAndDimensions_1_to_6();
         component.RunModel(aeroBody);
 
-        // Draw the arrow
-        SetArrowPositionAndRotationFromVector(DragArrow, component.resultantForce_earthFrame, component.forcePointOfAction_earthFrame);
+        if (useCoefficientForScale)
+        {
+            // Draw the arrow using the normalised force vector, scaled up by the drag coefficient
+            // Need to use the absolute value of the coefficient because we already have the direction from the force
+            SetArrowPositionAndRotationFromVector(DragArrow, Mathf.Abs(component.CD) * component.resultantForce_earthFrame.normalized, component.forcePointOfAction_earthFrame);
+        }
+        else
+        {
+            // Draw the arrow
+            SetArrowPositionAndRotationFromVector(DragArrow, component.resultantForce_earthFrame, component.forcePointOfAction_earthFrame);
+        }
+
+        
     }
 }

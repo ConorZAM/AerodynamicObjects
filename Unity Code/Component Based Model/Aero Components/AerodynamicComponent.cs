@@ -22,6 +22,7 @@ public class AerodynamicComponent : MonoBehaviour
     // of forces and moments into earth coordinates once, instead of doing a transform for each component
     public Vector3 resultantForce_bodyFrame;
     public Vector3 resultantMoment_bodyFrame;
+    public Vector3 resultantMoment_earthFrame;
 
     // These components make more sense for applying forces to rigidbodies which do not align with
     // the aero body frame!
@@ -38,8 +39,47 @@ public class AerodynamicComponent : MonoBehaviour
     {
         // This function allows for centre of pressure force application
         // Not sure how to account for moment due to camber though...
-        rigidbody.AddForceAtPosition(resultantForce_earthFrame, forcePointOfAction_earthFrame);
+
+        if (Vector3ContainsNaN(resultantForce_earthFrame))
+        {
+            Debug.LogWarning("Resultant force contains NaN, applying no force instead");
+        }
+        else
+        {
+            rigidbody.AddForceAtPosition(resultantForce_earthFrame, forcePointOfAction_earthFrame);
+        }
+
+        if (Vector3ContainsNaN(resultantMoment_earthFrame))
+        {
+            Debug.LogWarning("Resultant torque contains NaN, applying no torque instead");
+        }
+        else
+        {
+            // I need to make sure the body and rigid body frames line up, if not then I need to correct for this
+            rigidbody.AddTorque(resultantMoment_earthFrame);
+        }
     }
+
+    // ================================ EXPERIMENTAL ===============================================
+
+    //public float delta = 0.9f;
+    //public void SaturateForces(AeroBody body)
+    //{
+    //    // Acceleration due to the force (a = F/m)
+    //    float acceleration = resultantForce_earthFrame.magnitude / body.rb.mass;
+
+    //    // Assuming forward Euler integration, get the velocity change due to "impulse"
+    //    float deltaVelocity = acceleration * Time.fixedDeltaTime;
+
+    //    // If that velocity is going to change the direction...
+    //    if (deltaVelocity > body.aeroBodyFrame.windVelocity.magnitude)
+    //    {
+    //        // Set force to be just the delta velocity which can't overshoot
+    //        resultantForce_earthFrame = delta * (body.aeroBodyFrame.windVelocity.magnitude / Time.fixedDeltaTime) * body.rb.mass * resultantForce_earthFrame.normalized;
+    //    }
+    //}
+
+    // ==============================================================================================
 
     private void OnEnable()
     {
@@ -63,5 +103,17 @@ public class AerodynamicComponent : MonoBehaviour
         // Don't need to check for null reference here as these components require an AeroBody
         GetComponent<AeroBody>().runModelEvent -= RunModel;
         GetComponent<AeroBody>().applyForcesEvent -= ApplyForces;
+    }
+
+    public static bool Vector3ContainsNaN(Vector3 vector)
+    {
+        if (float.IsNaN(vector.x))
+            return true;
+        if (float.IsNaN(vector.y))
+            return true;
+        if (float.IsNaN(vector.z))
+            return true;
+
+        return false;
     }
 }

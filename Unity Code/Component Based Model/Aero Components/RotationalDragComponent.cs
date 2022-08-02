@@ -14,7 +14,6 @@ public class RotationalDragComponent : AerodynamicComponent
 
     public override void RunModel(AeroBody aeroBody)
     {
-
         // Rotational uses the circumference of the body
         reynoldsNum_x_rotational = Mathf.Abs(Mathf.PI * aeroBody.rho * aeroBody.aeroBodyFrame.angularWindVelocity.x * aeroBody.aeroBody.midAxis * aeroBody.aeroBody.majorAxis / aeroBody.mu);
         reynoldsNum_y_rotational = Mathf.Abs(Mathf.PI * aeroBody.rho * aeroBody.aeroBodyFrame.angularWindVelocity.y * aeroBody.aeroBody.majorAxis * aeroBody.aeroBody.majorAxis / aeroBody.mu);
@@ -25,7 +24,7 @@ public class RotationalDragComponent : AerodynamicComponent
         Cf_y_rotational = reynoldsNum_y_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_y_rotational, 1f / 7f);
         Cf_z_rotational = reynoldsNum_z_rotational == 0 ? 0 : 0.027f / Mathf.Pow(reynoldsNum_z_rotational, 1f / 7f);
 
-
+        // Elementwise square of the angular velocity - I don't really get this but okay
         // Scale by the direction here to preserve the signs of the angular velocity
         directionalAngularVelocitySquared_bodyFrame = Vector3.Scale(Vector3.Scale(aeroBody.aeroBodyFrame.angularWindVelocity, aeroBody.aeroBodyFrame.angularWindVelocity), aeroBody.aeroBodyFrame.angularWindVelocity_normalised);
 
@@ -51,5 +50,6 @@ public class RotationalDragComponent : AerodynamicComponent
         // Compute the resulting force and moment
         resultantForce_bodyFrame = Vector3.zero;
         resultantMoment_bodyFrame = -dampingTorque_bodyFrame;
+        resultantMoment_earthFrame = aeroBody.TransformDirectionBodyToEarth(resultantMoment_bodyFrame);
     }
 }

@@ -44,16 +44,37 @@ public class AeroComponentAdder : MonoBehaviour
 
         // Add all the components if they aren't there already
 
-        if (go.GetComponent<ThinAerofoilComponent>())
+
+        ThinAerofoilComponent thinAerofoil = go.GetComponent<ThinAerofoilComponent>();
+        TranslationalDragComponent translationalDrag = go.GetComponent<TranslationalDragComponent>();
+
+        if (thinAerofoil)
         {
-            if (!go.GetComponent<ThinAerofoilArrows>())
+            // If we have both lift and drag models attached
+            if (translationalDrag)
             {
-                go.AddComponent<ThinAerofoilArrows>();
+                // Add the total arrow components which require both components
+                if (!go.GetComponent<LiftOnlyArrows>())
+                {
+                    go.AddComponent<LiftOnlyArrows>();
+                }
+                if (!go.GetComponent<TotalDragArrows>())
+                {
+                    go.AddComponent<TotalDragArrows>();
+                }
+            }
+            else
+            {
+                // Otherwise, we just have the lift component, so add the arrows for that component
+                if (!go.GetComponent<ThinAerofoilArrows>())
+                {
+                    go.AddComponent<ThinAerofoilArrows>();
+                }
             }
         }
-
-        if (go.GetComponent<TranslationalDragComponent>())
+        else if (translationalDrag)
         {
+            // Also need to check incase we have just the translational drag component attached
             if (!go.GetComponent<TranslationalDragArrows>())
             {
                 go.AddComponent<TranslationalDragArrows>();

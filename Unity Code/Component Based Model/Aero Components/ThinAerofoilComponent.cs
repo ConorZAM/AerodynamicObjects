@@ -8,7 +8,6 @@ public class ThinAerofoilComponent : AerodynamicComponent
     // and a normal force model to determine the lift and moment due to lift
     // Only induced drag is added by this component!
 
-
     public float aspectRatioCorrection_kAR, thicknessCorrection_kt; // (dimensionless)
     const float thicknessCorrection_labdat = 6f;                    // (dimensionless)
     // Blend between pre and post stall
@@ -21,7 +20,7 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
     // Lift
     public float CL;                            // (dimensionless)
-    public float CZmax = 1.2f;                  // (dimensionless)
+    public float CZmax = 1f;                    // (dimensionless)
     public float liftCurveSlope;                // (dimensionless)
     public float CL_preStall, CL_postStall;     // (dimensionless)
     public float CD_induced;                    // (dimensionless)
@@ -43,8 +42,13 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
         // Prandtyl Theory
         // Clamp lower value to min AR of 2. Otherwise lift curve slope gets lower than sin 2 alpha which is non physical
+
+        // ============ Might be no need to check for this =================
         // Check for the divide by zero, although I think a zero AR means bigger problems anyway
         aspectRatioCorrection_kAR = (aspectRatio == 0f) ? 0f : Mathf.Clamp(aspectRatio / (2f + aspectRatio), 0f, 1f);
+        // =================================================================
+        //aspectRatioCorrection_kAR = Mathf.Clamp(aspectRatio / (2f + aspectRatio), 0f, 1f);
+
 
         // This value needs checking for thickness to chord ratio of 1
 
@@ -107,7 +111,9 @@ public class ThinAerofoilComponent : AerodynamicComponent
         // We won't need to compute the moments anymore - just leaving it in for now so nothing else breaks!
 
         // The minus sign here is dirty but I can't figure out why the pitching moment is always in the wrong direction?!
-        resultantMoment_bodyFrame = new Vector3(-CM * qS * aeroBody.EAB.chord_c, 0, 0);
-        resultantMoment_bodyFrame = aeroBody.TransformDirectionEABToBody(resultantMoment_bodyFrame);
+        //resultantMoment_bodyFrame = new Vector3(-CM * qS * aeroBody.EAB.chord_c, 0, 0);
+        //resultantMoment_bodyFrame = aeroBody.TransformDirectionEABToBody(resultantMoment_bodyFrame);
+
+
     }
 }

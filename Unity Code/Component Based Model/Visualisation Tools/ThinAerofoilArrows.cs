@@ -37,7 +37,18 @@ public class ThinAerofoilArrows : ComponentArrows
         Vector3 lift_earthFrame = aeroBody.TransformDirectionBodyToEarth(component.lift_bodyFrame);
         Vector3 inducedDrag_earthFrame = aeroBody.TransformDirectionBodyToEarth(component.inducedDrag_bodyFrame);
 
-        SetArrowPositionAndRotationFromVector(LiftArrow, lift_earthFrame, component.forcePointOfAction_earthFrame);
-        SetArrowPositionAndRotationFromVector(InducedDragArrow, inducedDrag_earthFrame, component.forcePointOfAction_earthFrame);
+        if (useCoefficientForScale)
+        {
+            // Need to use the absolute value of the coefficients because we already have the direction from the forces
+            SetArrowPositionAndRotationFromVector(LiftArrow, Mathf.Abs(component.CL) * lift_earthFrame.normalized, component.forcePointOfAction_earthFrame);
+            SetArrowPositionAndRotationFromVector(InducedDragArrow, Mathf.Abs(component.CD_induced) * inducedDrag_earthFrame.normalized, component.forcePointOfAction_earthFrame);
+        }
+        else
+        {
+            SetArrowPositionAndRotationFromVector(LiftArrow, lift_earthFrame, component.forcePointOfAction_earthFrame);
+            SetArrowPositionAndRotationFromVector(InducedDragArrow, inducedDrag_earthFrame, component.forcePointOfAction_earthFrame);
+        }
+
+        
     }
 }

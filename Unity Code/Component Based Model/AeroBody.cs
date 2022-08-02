@@ -292,7 +292,7 @@ public class AeroBody : MonoBehaviour
     // Properties
     public float dynamicPressure;      // (Pa)
     public float qS;                   // (N)
-    public float rho = 1.2f;           // (kg/m^3)
+    public float rho = 1.29f;           // (kg/m^3)
     public float mu = 1.8e-5f;         // (Nm/s)
 
     // Resultant forces and moments to be applied to the rigid body component
@@ -574,6 +574,78 @@ public class AeroBody : MonoBehaviour
         applyForcesEvent?.Invoke(rb);
     }
 
+    // ============================== Experimental ==========================================
+
+    //public float targetDt = 0.02f;
+    ////public float minDt = 0.002f;
+    //public float delta = 0.99f;
+    //public float minStep;
+    //public bool useAdaptiveTimeStep = false;
+    //public bool accountForExternalForces = false;
+    //public Vector3 netAcceleration;
+
+    //public void ApplyAdaptiveTimeStep()
+    //{
+    //    // Start with our target time step, if nothing is smaller than this
+    //    // then we will default to the targetDt
+    //    minStep = targetDt;
+
+    //    // Multiple references to speed are made so store it
+    //    float speed = earthFrame.windVelocity.magnitude;
+
+    //    // Make sure we have some speed
+    //    if(speed == 0f)
+    //    {
+    //        // If not, then the acceleration can't change the velocity direction
+    //        // so there's no point in simulating at a small time step anyway
+    //        Time.fixedDeltaTime = minStep;
+    //        return;
+    //    }
+
+    //    // Check if the acceleration will invert the velocity by more than 2*v
+    //    netAcceleration = rb.GetAccumulatedForce() / rb.mass;
+
+    //    if (accountForExternalForces && rb.useGravity)
+    //    {
+    //        netAcceleration += Physics.gravity;
+    //    }
+
+    //    // Vector of k for each component separately? Or do we need to do some pythagoras here...
+
+    //    if(netAcceleration.x != 0f)
+    //    {
+    //        minStep = Mathf.Min(GetMinStep(speed, netAcceleration.x), minStep);
+    //    }
+
+    //    if(netAcceleration.y != 0f)
+    //    {
+    //        minStep = Mathf.Min(GetMinStep(speed, netAcceleration.y), minStep);
+    //    }
+
+    //    if (netAcceleration.z != 0f)
+    //    {
+    //        minStep = Mathf.Min(GetMinStep(speed, netAcceleration.z), minStep);
+    //    }
+
+    //    // Could use min function here but the if statement lets us put out
+    //    // a warning as well!
+    //    if (minStep < targetDt)
+    //    {
+    //        Time.fixedDeltaTime = minStep; 
+    //        //Debug.LogWarning(gameObject.name + " encountered an acceleration which was too large for the target time step. " +
+    //        //    "A smaller time step of " + minStep.ToString() + " s was used to ensure numerical stability of the simulation. " +
+    //        //    "Consider increasing the mass of your object, running at a smaller time step, reducing wind speed, reducing the size of your object etc.");
+    //    }
+
+    //}
+
+    //private float GetMinStep(float speed, float acceleration)
+    //{
+    //    return delta * Mathf.Abs(speed / acceleration);
+    //}
+
+    // ======================================================================================
+
     public void GetEllipsoid_1_to_2()
     {
         GetReferenceFrames_1();
@@ -659,6 +731,10 @@ public class AeroBody : MonoBehaviour
         GetComponentForces_7();
         ApplyAerodynamicForces_8();
 
+        //if (useAdaptiveTimeStep)
+        //{
+        //    ApplyAdaptiveTimeStep();
+        //}
     }
 
     // This could be offloaded to a separate class with a singleton so we don't have to store it in

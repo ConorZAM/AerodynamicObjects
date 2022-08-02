@@ -17,6 +17,9 @@ public class ComponentArrows : MonoBehaviour
     public float offset = 0f;
     [Tooltip("Does the arrow point towards the point of action or away from it")]
     public bool pointAtPoint;
+    [Tooltip("Use the coefficient for the aerodynamic force to scale the length of the arrow?" +
+        "If false then the force is used to scale the arrow length. Wind arrows will be normalised to a direction vector is this is true.")]
+    public bool useCoefficientForScale;
 
     public float scale { get { return ArrowSettings.Singleton().scale; } }
     public float sensitivity { get { return ArrowSettings.Singleton().sensitivity; } }

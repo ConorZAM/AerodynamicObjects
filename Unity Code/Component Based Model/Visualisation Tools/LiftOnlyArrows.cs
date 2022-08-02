@@ -39,6 +39,14 @@ public class LiftOnlyArrows : ComponentArrows
         // Get the separate lift and induced drag force vectors in earth frame
         Vector3 lift_earthFrame = aeroBody.TransformDirectionBodyToEarth(component.lift_bodyFrame);
 
-        SetArrowPositionAndRotationFromVector(LiftArrow, lift_earthFrame, component.forcePointOfAction_earthFrame);
+        if (useCoefficientForScale)
+        {
+            // Need to use the absolute value of the coefficient because we already have the direction from the force
+            SetArrowPositionAndRotationFromVector(LiftArrow, Mathf.Abs(component.CL) * lift_earthFrame.normalized, component.forcePointOfAction_earthFrame);
+        }
+        else
+        {
+            SetArrowPositionAndRotationFromVector(LiftArrow, lift_earthFrame, component.forcePointOfAction_earthFrame);
+        }
     }
 }
