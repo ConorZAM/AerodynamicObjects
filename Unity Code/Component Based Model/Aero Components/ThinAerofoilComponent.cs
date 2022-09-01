@@ -51,7 +51,6 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
 
         // This value needs checking for thickness to chord ratio of 1
-
         // Empirical correction to account for viscous effects across all thickness to chord ratios
         thicknessCorrection_kt = Mathf.Exp(-thicknessCorrection_labdat * aeroBody.EAB.thicknessToChordRatio_bOverc * aeroBody.EAB.thicknessToChordRatio_bOverc);
 
@@ -70,6 +69,12 @@ public class ThinAerofoilComponent : AerodynamicComponent
 
         // Lift before and after stall
         CL_preStall = liftCurveSlope * effective_alpha;
+
+        // This could be simplified to (Vx * Vy) / V^2
+        // Based on sin(2a) == sin(a)cos(a)
+        // sin(a) = Vy/V
+        // cos(a) = Vx/V
+        // This simplification would remove the need for a trig function!
         CL_postStall = 0.5f * CZmax * thicknessCorrection_kt * Mathf.Sin(2f * effective_alpha);
 
         // Sigmoid function for blending between pre and post stall

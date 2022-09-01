@@ -79,52 +79,8 @@ public class AeroBody : MonoBehaviour
      *      transform directions from Body and EAB frames to the Earth frame
      */
 
-    public class ReferenceFrame
-    {
-        // Useful directions - I don't think they get used at all actually...
-        public Vector3 xDirection, yDirection, zDirection;  // (unit vector)
+    
 
-
-        // Wind resolved into this coordinate frame
-        public Vector3 windVelocity;                    // (m/s)
-        public Vector3 windVelocity_normalised;         // (unit vector
-        public Vector3 angularWindVelocity;             // (rad/s)
-        public Vector3 angularWindVelocity_normalised;  // (unit vector)
-
-        // The rotation from the previous frame of reference to this frame of reference
-        public Quaternion objectToFrameRotation = Quaternion.identity;
-
-        // The rotation from the current frame of reference back to the previous frame
-        public Quaternion inverseObjectToFrameRotation = Quaternion.identity;
-
-        public void SetDirectionVectors(Vector3 x, Vector3 y, Vector3 z)
-        {
-            xDirection = x;
-            yDirection = y;
-            zDirection = z;
-        }
-
-        public void SetFrameRotation(Quaternion rotation)
-        {
-            // This was the logical approach to me... but it seems they need to be reverse
-            //objectToFrameRotation = rotation;
-            //inverseObjectToFrameRotation = Quaternion.Inverse(rotation);
-
-            objectToFrameRotation = Quaternion.Inverse(rotation);
-            inverseObjectToFrameRotation = rotation;
-        }
-
-        public void SetResolvedWind(Vector3 linearWind, Vector3 angularWind)
-        {
-            // The normalisations here are probably wasted computation... it's an
-            // optimisation incase the normalised vector is needed more than once
-            windVelocity = objectToFrameRotation * linearWind;
-            windVelocity_normalised = windVelocity.normalized;
-
-            angularWindVelocity = objectToFrameRotation * angularWind;
-            angularWindVelocity_normalised = angularWindVelocity.normalized;
-        }
-    }
 
     // Converts a vector in EAB frame to earth frame
     public Vector3 TransformDirectionEABToEarth(Vector3 vector)
@@ -244,12 +200,16 @@ public class AeroBody : MonoBehaviour
     //      These are properties which are not changed by the projection
     //      from AeroBody to EAB and so are kept outside of the classes
 
-    public float Camber; // (m)
-    public void SetCamber(float _camber)
+    [Tooltip("Body camber is the camber due to the shape of the body. This does not include the camber induced by flap deflection.")]
+    public float BodyCamber;        // (m)
+    [Tooltip("Effective camber is the combination of the body camber and the camber due to flap deflection")]
+    public float EffectiveCamber;   // (m)
+
+    public void SetFlapCamber(float flapCamber)
     {
-        Camber = _camber;
-        aeroBody.SetAerodynamicRatios(_camber);
-        EAB.SetAerodynamicRatios(_camber);
+        EffectiveCamber = BodyCamber + flapCamber;
+        aeroBody.SetAerodynamicRatios(EffectiveCamber);
+        EAB.SetAerodynamicRatios(EffectiveCamber);
     }
 
     // The projection from body to eab assumes constant areas for the ellipsoid body
@@ -410,7 +370,7 @@ public class AeroBody : MonoBehaviour
         aeroBodyFrame.SetFrameRotation(Quaternion.LookRotation(aeroBodyFrame.zDirection, aeroBodyFrame.yDirection));
 
         // Set the aerodynamic related properties
-        aeroBody.SetAerodynamicRatios(Camber);
+        aeroBody.SetAerodynamicRatios(EffectiveCamber);
     }
 
     public void GetEllipsoidProperties_2()
@@ -545,7 +505,7 @@ public class AeroBody : MonoBehaviour
         EAB.chord_c = 2f * EAB.midAxis;
 
         // Work out aero parameters of equivalent body
-        EAB.SetAerodynamicRatios(Camber);
+        EAB.SetAerodynamicRatios(EffectiveCamber);
 
         // Profile area is the projection in the wind direction
         profileArea = Vector3.Scale(areaVector, aeroBodyFrame.windVelocity_normalised).magnitude;
@@ -777,6 +737,8 @@ public class AeroBody : MonoBehaviour
         else
         {
             // If the object is part of a group then it is scaled to be a cuboid shape and so we draw that instead
+
+            // This is actually drawing the wrong thing. We only know the object's new planform area!
             Gizmos.matrix = Matrix4x4.TRS(transform.position, transform.rotation * aeroBodyFrame.inverseObjectToFrameRotation, new Vector3(aeroBody.span_a, aeroBody.thickness_b, aeroBody.chord_c));
             Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
         }

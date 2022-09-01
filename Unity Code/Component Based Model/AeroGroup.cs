@@ -31,6 +31,8 @@ public class AeroGroup : MonoBehaviour
             bodyTotalArea += aeroBodies[i].bodyPlanformArea;
         }
 
+        // areaScale tells us how much the aero body planform areas need to be scaled by to
+        // make their total area equal to the wing's planform area
         areaScale = planformArea / bodyTotalArea;
 
 

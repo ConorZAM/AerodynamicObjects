@@ -35,6 +35,8 @@ public class TranslationalDragArrows : ComponentArrows
 
     void Update()
     {
+        
+
         // Taking the computational hit to get the up to date values
         aeroBody.ResolveWindAndDimensions_1_to_6();
         component.RunModel(aeroBody);
