@@ -21,13 +21,10 @@ public class AerodynamicComponent : MonoBehaviour
     // provided in the body reference frame so we only need to transform the entire sum
     // of forces and moments into earth coordinates once, instead of doing a transform for each component
     public Vector3 resultantForce_bodyFrame;
-    public Vector3 resultantMoment_bodyFrame;
-    public Vector3 resultantMoment_earthFrame;
-
-    // These components make more sense for applying forces to rigidbodies which do not align with
-    // the aero body frame!
     public Vector3 resultantForce_earthFrame;
     public Vector3 forcePointOfAction_earthFrame;
+    public Vector3 resultantMoment_bodyFrame;
+    public Vector3 resultantMoment_earthFrame;   
 
     public virtual void RunModel(AeroBody aeroBody)
     {

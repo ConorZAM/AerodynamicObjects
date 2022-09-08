@@ -5,8 +5,7 @@ using UnityEngine;
 
 public class AeroGroup : MonoBehaviour
 {
-    [HideInInspector]
-    public AeroBody[] aeroBodies;
+    public AeroBody[] aeroBodies = new AeroBody[0];
 
     public float planformArea;
     public float scaledArea;
@@ -17,9 +16,11 @@ public class AeroGroup : MonoBehaviour
 
     private void OnValidate()
     {
-        aeroBodies = GetComponentsInChildren<AeroBody>();
-        AssignAeroBodiesToGroup();
-        GetAreaScales();
+        if (aeroBodies.Length > 0)
+        {
+            AssignAeroBodiesToGroup();
+            GetAreaScales();
+        }
     }
 
     private void GetAreaScales()
@@ -50,5 +51,29 @@ public class AeroGroup : MonoBehaviour
             aeroBodies[i].myGroup = this;
             aeroBodies[i].GetEllipsoid_1_to_2();
         }
+    }
+
+    public void GetChildBodies()
+    {
+        aeroBodies = GetComponentsInChildren<AeroBody>();
+
+        int length = aeroBodies.Length;
+        switch (length)
+        {
+            case 0:
+                Debug.Log("No aero bodies were found in children of " + gameObject.name);
+                break;
+            case 1:
+                Debug.Log("1 aero body found and added to group.");
+                AssignAeroBodiesToGroup();
+                GetAreaScales();
+                break;
+            default:
+                Debug.Log(aeroBodies.Length + " aero bodies found and added to group.");
+                AssignAeroBodiesToGroup();
+                GetAreaScales();
+                break;
+        }
+
     }
 }
